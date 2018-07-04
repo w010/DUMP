@@ -35,16 +35,12 @@ $optionsCustom = [
 	'dontExecCommands' => getenv('TYPO3_CONTEXT') === 'Development' ? 0 : 0,
 
 
-	// exec commands, but don't show them on LIVE
+	// exec commands, but don't show them
 	//'dontShowCommands' => getenv('TYPO3_CONTEXT') === 'Production' ? 0 : 0,
 
 
 	// query database using cli bin execute or mysqli connection
 	//'defaultDatabaseQueryMethod' => Dump::DATABASE_QUERY_METHOD__CLI,
-
-
-	// database export omit tables
-	//'defaultOmitTables' => [],
 
 
 	// generates command lines prepended with "docker exec -it [containername]"
@@ -58,20 +54,30 @@ $optionsCustom = [
 
 
 	// default preselection of files and dirs for filesystem archive
-	// 'defaultIncludeFilesystem' => '',
-	// 'defaultExcludeFilesystem' => '',
+	// 'defaultIncludeFilesystem' => [],
+	// 'defaultExcludeFilesystem' => [],
 
 	// list items in exclude selector from these directories
-	//'defaultExcludeFilesystem_listItemsFromDirs' => '',
+	//'defaultExcludeFilesystem_listItemsFromDirs' => [],
 
 
 	// default tables for "Dump with omit" action, if not specified
 	// 'defaultOmitTables' => ['index_rel', 'sys_log', 'sys_history', 'index_fulltext', 'sys_refindex', 'index_words', 'tx_extensionmanager_domain_model_extension'],
 
 
-	// prefilled domains convert list
-	'updateDomains_defaultDomainsFrom' => '',
-	'updateDomains_defaultDomainsTo' => '',
+    // preconfigured lists of domains for environments (Domains Update action)
+	'updateDomains_defaultDomainSet' => [
+        'LOCAL' => '
+        ',
+        'DEV' => '
+        ',
+        'STAGE' => '
+        ',
+    ],
+
+    // prefill input with domains from this key domain-set
+//    'updateDomains_defaultDomainSetFrom' => 'STAGE',
+//    'updateDomains_defaultDomainSetTo' => 'DEV',
 
 ];
 

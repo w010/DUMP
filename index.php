@@ -6,6 +6,8 @@
 /**
  *  WTP DUMP/BACKUP TOOL FOR TYPO3 - wolo.pl '.' studio
  *  2013-2018
+ *
+ *  Supported TYPO3 versions: 4, 6, 7, 8, 9
  */
 
 // ! you should change default password !
@@ -16,13 +18,17 @@
 // IT DOES LOW LEVEL DB / FILESYSTEM OPERATIONS AND DOESN'T HAVE ANY USER-INPUT SECURITY CHECK.
 // IF THIS IS YOUR SITE AND RUNNING IN PUBLIC/PRODUCTION ENVIRONMENT AND YOU ARE
 // NOT SURE IF THIS FILE SHOULD BE HERE, PLEASE DELETE THIS SCRIPT IMMEDIATELY
+// Please remember, this is my script for my use and I'm giving it to you that you could save some
+// time at work on repetitive system operations. There is no guarantee that it works as you want
 
-/** todo:
- * - domains update: button to switch values between from/to (or better: selector of domains sets?
+/**
+ * todo:
+ * conf: omit tables, include directories - make them work also as linebreak-separated lists instead of array
  */
 
 
-define ('DUMP_VERSION', '3.0.2');
+
+define ('DUMP_VERSION', '3.1.0');
 
 
 
@@ -32,30 +38,31 @@ error_reporting(E_ALL ^ E_NOTICE ^ E_WARNING ^ E_STRICT ^ E_DEPRECATED);
 
 // default options for this script operation
 $optionsDefault = [
-    // don't use native path and version detection (needs typo3 sources)
+
+    // default project name is generated from subdomain, but it's not always ok - may be set
+    'defaultProjectName' => '',
+
+    // don't use native path and version detection (it needs typo3 sources to work. otherwise uses internal PATH_site detection)
 	'dontUseTYPO3Init' => false,
 
-	// script only displays generated command line, but doesn't exec it
+	// script generates command line, may display it, but doesn't exec it
 	'dontExecCommands' => 0,
 
-	// exec commands, but don't show them on PUB
+	// exec generated commands, but don't display them
 	'dontShowCommands' => 0,
 
     // query database using cli bin execute or mysqli connection
     'defaultDatabaseQueryMethod' => Dump::DATABASE_QUERY_METHOD__MYSQLI,
 
-	// default tables for "Dump with omit" action, if not specified
+	// default tables for "Omit these tables" (Database Export action)
 	'defaultOmitTables' => ['index_rel', 'sys_log', 'sys_history', 'index_fulltext', 'sys_refindex', 'index_words', 'tx_extensionmanager_domain_model_extension'],
 
-    // default preselection of files and dirs for filesystem archive
+    // default preselection of files and dirs (Filesystem Pack action)
     'defaultIncludeFilesystem' => ['typo3conf'],
     'defaultExcludeFilesystem' => ['fileadmin/content', 'fileadmin/_processed_', 'fileadmin/_temp_', 'fileadmin/user_upload', 'typo3conf/AdditionalConfiguration_host.php'],
 
-    // list items in exclude selector from these directories
+    // list items in exclude selector from these directories (Filesystem Pack action)
     'defaultExcludeFilesystem_listItemsFromDirs' => ['fileadmin', 'typo3conf'],
-
-	// default project name is generated from subdomain, but it's not always ok
-	'defaultProjectName' => '',
 
 	// adds docker exec on container to command line
 	'docker' => false,
@@ -64,12 +71,15 @@ $optionsDefault = [
 	'docker_containerSql' => '',
 	'docker_containerPhp' => '',
 
-    // domain to replace for fetch file urls
+    // domain to replace for fetch file urls (Manually Fetch Files action)
 	'fetchFiles_defaultSourceDomain' => '',
 
-    // update domain records preconfigured list
-    'updateDomains_defaultDomainsFrom' => '',
-    'updateDomains_defaultDomainsTo' => '',
+    // preconfigured lists of domains for environments ['key' => 'domains linebreak-separated-list'] (Domains Update action)
+    'updateDomains_defaultDomainSet' => [],
+
+	// prefill input with domains from this key domain-set ('key')
+    'updateDomains_defaultDomainSetFrom' => '',
+    'updateDomains_defaultDomainSetTo' => '',
 ];
 
 // custom options may be included to override
@@ -403,7 +413,6 @@ class Dump  {
 
 			$dumpOnlyStructureQuery = ';'     // end previous command only if needed
 				. chr(10) . chr(10)
-
 				//. $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --skip-set-charset --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
 				. $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
 				. " --no-data \\"
@@ -683,11 +692,11 @@ print $ret;*/
 
 	private function addEnvironmentMessage()	{
 		$environment = '';
-		if (defined('DEV') && DEV)		$environment = 'DEV';
-		if (defined('LOCAL') && LOCAL)	$environment = 'LOCAL';
+		if (defined('DEV') && DEV)							$environment = 'DEV';
+		if (defined('LOCAL') && LOCAL)						$environment = 'LOCAL';
 		if (getenv('TYPO3_CONTEXT') == 'Development')   $environment = 'Development';
 		if (getenv('TYPO3_CONTEXT') && !$environment)   $environment = getenv('TYPO3_CONTEXT');
-		if (!$environment)					    $environment = 'PUBLIC';
+		if (!$environment)					    				$environment = 'PUBLIC';	// if not detected at this point, assume and warn that it's public
 		if ($environment == 'Production' || $environment == 'PUBLIC')
 			$environment = '<span class="error">'.$environment.' !!!!</span>';
 		else
@@ -836,11 +845,12 @@ print $ret;*/
 
 	// FILE FETCH
 
-	/**
-	 * Returns information about a folder.
-	 * @param string $folderIdentifier In the case of the LocalDriver, this is the (relative) path to the file.
-	 * @return array
-	 */
+    /**
+     * Returns information about a folder.
+     * @param string $fileUrl Relative path to the file
+     * @param array $fileUrlParts
+     * @return void
+     */
 	public function checkFile($fileUrl, $fileUrlParts)    {
 
         $allowedExtensions = ['jpg', 'png', 'gif', 'svg', 'txt', 'csv', 'pdf'];
@@ -923,8 +933,8 @@ print $ret;*/
 		ul  {list-style: none;  float: left;    margin-top: 0;  padding: 0;}
 		.actions ul   {background: #eee;    padding: 20px;  box-shadow: 5px 5px 8px -2px #aaa;}
 		.actions li > label:hover   {color: darkorange;}
-		.actions li.active > label  {color: #03d;}
-		.action-sub-options  {display: none;    padding: 10px 20px 20px;    background: gainsboro;  margin: 10px 0 0 20px;  box-shadow: 5px 5px 8px -2px #aaa;}
+		.actions li.active > label  {color: darkorange;}
+		.action-sub-options  {display: none;    padding: 10px 20px 20px;    background: gainsboro;  margin: 10px 0 20px 20px;  box-shadow: 5px 5px 8px -2px #aaa;}
         select   {margin-right: 10px;}
 		input[type=radio]:checked + .action-sub-options  {display: block;}
 		input[type=checkbox]    {margin: 2px 6px 2px 0;}
@@ -937,7 +947,8 @@ print $ret;*/
 		.form-row {display: block;  margin-bottom: 12px;}
         .form-row-checkbox label, .form-row-radio label {cursor: pointer;}
 		.selector-tables textarea   {overflow-wrap: normal;}
-		footer	  {font-size: 80%;  margin-top: 70px;}
+		.predefined-sets a:not(:first-child):before	{content: ' | ';}
+		footer	 {font-size: 80%;  margin-top: 70px;}
 		pre		 {line-height: 1.2em; white-space: pre-wrap;}
 		.config p	{margin: 8px 0;}
 		.to-left	{float: left;}
@@ -945,13 +956,16 @@ print $ret;*/
 		.indent	 {margin-left: 40px;}
 		.tooltip	{background: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiI+CjxwYXRoIGQ9Im0xMjggMjIuMTU4YTEwNS44NCAxMDUuODQgMCAwIDAgLTEwNS44NCAxMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAxMDUuODQgMTA1Ljg0IDEwNS44NCAxMDUuODQgMCAwIDAgMTA1Ljg0IC0xMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAtMTA1Ljg0IC0xMDUuODR6bTAgMzIuNzZjNS4xNiAwLjExNyA5LjU1IDEuODc1IDEzLjE4IDUuMjczIDMuMzQgMy41NzUgNS4wNyA3Ljk0IDUuMTkgMTMuMDk2LTAuMTIgNS4xNTYtMS44NSA5LjQwNC01LjE5IDEyLjc0NC0zLjYzIDMuNzUtOC4wMiA1LjYyNS0xMy4xOCA1LjYyNXMtOS40LTEuODc1LTEyLjc0LTUuNjI1Yy0zLjc1LTMuMzQtNS42My03LjU4OC01LjYzLTEyLjc0NHMxLjg4LTkuNTIxIDUuNjMtMTMuMDk2YzMuMzQtMy4zOTggNy41OC01LjE1NiAxMi43NC01LjI3M3ptLTE2LjM1IDUzLjc5MmgzMi43OXY5Mi4zN2gtMzIuNzl2LTkyLjM3eiIgZmlsbC1ydWxlPSJldmVub2RkIiBmaWxsPSIjNzJhN2NmIi8+Cjwvc3ZnPgo=');
             background-size: 16px 16px;     background-position: left center;   background-repeat: no-repeat;   min-height: 16px;   display: inline-block;  padding-left: 16px; cursor: help;   margin-left: 4px;}
+		a	{text-decoration: none;		color: #03d;}
+		a:hover	{text-decoration: underline;}
 
         @media screen and (min-width: 900px) {
             .actions    {position: relative;}
-            .action-sub-options {min-width: calc((50% / 3) * 2);     top: 0;     left: 390px;    margin: 0;  position: absolute;}
+            .action-sub-options {min-width: calc((50% / 3) * 2);     top: 0;     left: 390px;    margin: 0 0 20px;  position: absolute;}
         }
 	</style>
     <script>
+		// allow uncheck of radio buttons using ctrl
         document.addEventListener('click', function(e){
             if (e.ctrlKey === true &&
                 e.target.tagName === 'INPUT' &&
@@ -960,10 +974,12 @@ print $ret;*/
                 e.target.checked = false;
             }
         });
-        document.addEventListener("DOMContentLoaded", function(event) {
+        // make input box enabled/disabled depending on checkbox checked
+        document.addEventListener('DOMContentLoaded', function(e) {
             toggleInput('omitTablesIncludeInQuery', 'omitTables');
         });
 
+        // select text inside a node
         function selectText(containerId) {
             if (document.selection) {
                 var range = document.body.createTextRange();
@@ -1141,32 +1157,52 @@ PATH_dump = <?php  print PATH_dump;  ?>
                                     'options' => [
                                         [
                                             'label' => "Updates domains in database",
-                                            'valid' => !$Dump->checkFieldError('domainsFrom'),
+                                            //'valid' => !$Dump->checkFieldError('domainsFrom'),
                                             'class' => 'selector-domains',
                                             'content' => function() use ($Dump) {
-                                                $domainsFrom = count($_POST['domainsFrom'])  ?  $_POST['domainsFrom']  :  $Dump->options['updateDomains_defaultDomainsFrom'];
-                                                $domainsTo = count($_POST['domainsTo'])  ?  $_POST['domainsTo']  :  $Dump->options['updateDomains_defaultDomainsTo'];
+                                                $domainsFrom = count($_POST['domainsFrom'])  ?  $_POST['domainsFrom']  :  trim($Dump->options['updateDomains_defaultDomainSet'][ $Dump->options['updateDomains_defaultDomainSetFrom'] ]);
+                                                $domainsTo = count($_POST['domainsTo'])  ?  $_POST['domainsTo']  :  trim($Dump->options['updateDomains_defaultDomainSet'][ $Dump->options['updateDomains_defaultDomainSetTo'] ]);
                                                 $countDomainFrom = count(explode("\n", $domainsFrom))  OR  5;
                                                 $countDomainTo = count(explode("\n", $domainsTo))  OR  5;
+
+                                                $linksSetsFrom = '';
+                                                $linksSetsTo = '';
+                                                foreach (is_array($Dump->options['updateDomains_defaultDomainSet']) ? $Dump->options['updateDomains_defaultDomainSet'] : [] as $domainSetKey => $domainSet)	{
+                                                	$domainSetId = 'placeholder_domainset_'.$domainSetKey;
+                                                    $domainSetOnclickFrom = "document.getElementById('domainsFrom').innerHTML = document.getElementById('".$domainSetId."').innerHTML; return false;";
+                                                    $domainSetOnclickTo = "document.getElementById('domainsTo').innerHTML = document.getElementById('".$domainSetId."').innerHTML; return false;";
+                                                    $linksSetsFrom .= '<a href="#" onclick="'.$domainSetOnclickFrom.'">'.$domainSetKey.'</a> '
+															. '<div class="hidden" id="'.$domainSetId.'">'.trim($domainSet).'</div>';
+                                                    $linksSetsTo .= '<a href="#" onclick="'.$domainSetOnclickTo.'">'.$domainSetKey.'</a> '
+                                                            . '<div class="hidden" id="'.$domainSetId.'">'.trim($domainSet).'</div>';
+												}
+												if ($linksSetsFrom)
+                                                    $linksSetsFrom = "<label class='predefined-sets'>Predefined sets: {$linksSetsFrom}</label>";
+                                                if ($linksSetsTo)
+                                                    $linksSetsTo = "<label class='predefined-sets'>Predefined sets: {$linksSetsTo}</label>";
+
+
                                                 $code = "
                                                     <p><i>Replace domains in sys_domain records and pages external urls</i></p>
-                                                    <div class='form-row'>
-                                                        <label>Domains FROM:</label>
-                                                        <textarea name='domainsFrom' id='domainsFrom' rows='".$countDomainFrom."' cols='50'>"
-                                                            . $domainsFrom
+                                                    <div{$Dump->checkFieldError_printClass('domainsFrom', 'form-row')}>
+                                                        <label>Domains <b>FROM</b>:</label> 
+                                                        {$linksSetsFrom}
+                                                        <textarea name='domainsFrom' id='domainsFrom' rows='{$countDomainFrom}' cols='50'>".
+                                                            $domainsFrom
                                                         ."</textarea>
                                                     </div>
-                                                    <div class='form-row'>
-                                                        <label>Domains TO:</label>
-                                                        <textarea name='domainsTo' id='domainsTo' rows='".$countDomainTo."' cols='50'>"
-                                                            . $domainsTo
+                                                    <div{$Dump->checkFieldError_printClass('domainsTo', 'form-row')}>
+                                                        <label>Domains <b>TO</b>:</label>
+                                                        {$linksSetsTo}
+                                                        <textarea name='domainsTo' id='domainsTo' rows='{$countDomainTo}' cols='50'>".
+															$domainsTo
                                                         ."</textarea>
                                                     </div>
                                                     <div class='form-row form-row-radio'>
-                                                        <label>". $Dump->formField_radio('domainsUpdate_method', Dump::DATABASE_QUERY_METHOD__MYSQLI, $Dump->options['defaultDatabaseQueryMethod'])
-	                                                . "Mysqli - php connection</label>
-                                                        <label>". $Dump->formField_radio('domainsUpdate_method', Dump::DATABASE_QUERY_METHOD__CLI, $Dump->options['defaultDatabaseQueryMethod'])
-	                                                . "CLI - command line bin execute</label>
+                                                        <label>{$Dump->formField_radio('domainsUpdate_method', Dump::DATABASE_QUERY_METHOD__MYSQLI, $Dump->options['defaultDatabaseQueryMethod'])}
+	                                                	Mysqli - php connection</label>
+                                                        <label>{$Dump->formField_radio('domainsUpdate_method', Dump::DATABASE_QUERY_METHOD__CLI, $Dump->options['defaultDatabaseQueryMethod'])}
+	                                                	CLI - command line bin execute</label>
                                                     </div>";
                                                 return $code;
                                             }
