@@ -24,11 +24,12 @@
 /**
  * todo:
  * conf: omit tables, include directories - make them work also as linebreak-separated lists instead of array
+ * password in mysqldump and other params should be in single quotes (makes problems ie. when ! is in password and double quotes are used)
  */
 
 
 
-define ('DUMP_VERSION', '3.1.0');
+define ('DUMP_VERSION', '3.1.2a');
 
 
 
@@ -491,7 +492,7 @@ class Dump  {
 		/* $this->exec_control ('tar -zcf '.{$this->PATH_site}.'DUMP/'.$dumpFilename.'-v'.$this->projectVersion.'.tgz ./../* --exclude="typo3temp" --exclude="DUMP" --exclude="uploads" -exclude="typo3_src-*"  '); */
 
 		// display download link
-		$this->cmds[] = "<br><a href=\"{$dumpFilename}-v{$this->projectVersion}.sql.tgz\">{$dumpFilename}-v{$this->projectVersion}.tgz</a><br>";
+		$this->cmds[] = "<br><a href=\"{$dumpFilename}-v{$this->projectVersion}.tgz\">{$dumpFilename}-v{$this->projectVersion}.tgz</a><br>";
 	}
 
 
@@ -553,6 +554,8 @@ class Dump  {
 		    $this->msg('Fetching not allowed in context: ' . INSTANCE_CONTEXT, 'error');
 		}
 
+		if (!class_exists('\TYPO3\CMS\Core\Utility\GeneralUtility'))
+		    include_once($this->PATH_site.'typo3/sysext/core/Classes/Utility/GeneralUtility.php');
 		$filesToFetch = \TYPO3\CMS\Core\Utility\GeneralUtility::trimExplode(chr(10), $_POST['fetchFilesUrls']);
 
 		foreach ($filesToFetch as $fileUrl) {
