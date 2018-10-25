@@ -29,7 +29,7 @@
 
 
 
-define ('DUMP_VERSION', '3.1.2a');
+define ('DUMP_VERSION', '3.2.0-beta');
 
 
 
@@ -350,6 +350,11 @@ class Dump  {
 			case 'databaseQuery':
 				$this->action_databaseQuery($_POST['databaseQuery']);
 				break;
+
+			// XCLASS GENERATE
+            case 'generateXclass':
+                $this->action_xClassGenerate($_POST['prefill']);
+                break;
 		}
 	}
 
@@ -586,7 +591,7 @@ class Dump  {
 	 */
 	private function action_databaseQuery($databaseQuery)	{
 
-	    $queryMethod = $_POST['databaseQuery_method']  OR  $this->options['defaultDatabaseQueryMethod'];
+	    $queryMethod = $_POST['databaseQuery_method']  ?:  $this->options['defaultDatabaseQueryMethod'];
 
 		if (!$this->paramsRequiredPass(['databaseQuery' => $databaseQuery, 'databaseQuery_method' => $queryMethod]))
 			return;
@@ -606,6 +611,148 @@ class Dump  {
         }
 	}
 
+
+    /**
+     * XCLASS GENERATE
+     */
+	private function action_xClassGenerate($previewInfo = false)	{
+
+        $originalClassFullName = $_POST['originalClassFullName'];
+		$originalClassNamespaceParts = explode('\\', $originalClassFullName);
+        $originalClassName = array_pop($originalClassNamespaceParts);
+		$originalVendor = array_shift($originalClassNamespaceParts);
+		if ($originalVendor === 'TYPO3')	{
+			// in this case strip one more segment (usually 'CMS')
+            array_shift($originalClassNamespaceParts);
+			// should we put such classes into Classes/TYPO3/ or into additional TYPO3 namespace segment like in some projects? decision for now: NO
+		}
+		// only ext key UpperCammelCase
+		$originalNamespaceExtKey = $originalClassNamespaceParts[0];
+
+		$xclassName = $originalClassName;
+		$xclassNamespace = $_POST['extSaveXclassNamespace'] . '\\' . implode('\\', $originalClassNamespaceParts);
+		$xclassSavePath = $this->PATH_site . 'typo3conf/ext/' . $_POST['extSaveXclassKey'] . '/Classes/Ext/' . implode('/', $originalClassNamespaceParts).'/';
+		$localconfSavePath = $this->PATH_site . 'typo3conf/ext/' . $_POST['extSaveXclassKey'] . '/Configuration/Ext/' . $originalNamespaceExtKey . '/';
+
+		if ($previewInfo && $originalClassFullName)	{
+			$this->msg("xClass full name: $xclassNamespace\\$xclassName", 'info');
+			$this->msg("xClass save path: $xclassSavePath{$xclassName}.php", 'info');
+			$this->msg("localconf: {$localconfSavePath}ext_localconf.php", 'info');
+			return;
+		}
+
+        if (!$this->paramsRequiredPass(['originalClassFullName' => $_POST['originalClassFullName'], 'extSaveXclassNamespace' => $_POST['extSaveXclassNamespace']]))
+            return;
+
+        // clear file_exists status etc.. (still doesn't work well sometimes) // todo: if problem still occurs, add option to force overwrite
+        clearstatcache();
+
+
+        // make class directory structure
+        if (!is_dir($xclassSavePath))	{
+            $mkdirResult = mkdir($xclassSavePath, 0777, true);
+            $this->msg("Make class directory structure: " . json_encode($mkdirResult) /* . (!$mkdirResult ? '' : '')*/, $mkdirResult ? 'info' : 'error');
+        }
+
+        $xclassFilename = $xclassName . ".php";
+
+
+        // make empty or copy original class
+		switch ($_POST['xclassGenerate_method'])	{
+			case 'empty':
+				// create empty class with proper name, namespace and class operator (class ... extends ...)
+                if (!file_exists($xclassSavePath . $xclassFilename))	{
+                    $xclassContent = "<?php
+
+namespace {$xclassNamespace};
+
+class {$xclassName} extends \\{$originalClassFullName}	{
+	
+}
+
+";
+                    $result_xclassUpdate = file_put_contents($xclassSavePath . $xclassFilename, $xclassContent);
+                    $this->msg("Update class file status: " . json_encode((bool) $result_xclassUpdate) . (!$result_xclassUpdate ? ' - Write problem, check permissions' : ''), $result_xclassUpdate ? 'info' : 'error');
+                }
+                else	{
+                    $this->msg("Class file {$xclassSavePath}{$xclassFilename} already exists!", 'error');
+                }
+                break;
+
+			case 'copy':
+			default:
+				// get original class to extend, copy it to your ext's Classes dir, modify namespace and class operator line
+				$originalClassPath = $this->mapClassNamespaceAndPath('', $originalClassFullName);
+                $this->msg("Copy class to xclass file: {$xclassSavePath}{$xclassFilename}", 'info');
+
+				if (!file_exists($xclassSavePath . $xclassFilename))	{
+					$result_xclassCopy = copy($this->PATH_site . $originalClassPath, $xclassSavePath . $xclassFilename);
+                    $this->msg("Copy status: " . json_encode($result_xclassCopy) . (!$result_xclassCopy ? ' - Check directory structure or write permissions' : ''), $result_xclassCopy ? 'info' : 'error');
+
+                    // modify copied file contents
+                    if ($result_xclassCopy)	{
+						$xclassContent = file_get_contents($xclassSavePath . $xclassFilename);
+
+						// replace namespace
+						///preg_match('#namespace (.*?)#gm', $xclassContent, $matchesNamespace);
+                        $xclassContent = preg_replace('#namespace (.*?)[\n]#m', "namespace {$xclassNamespace};\n", $xclassContent);
+
+						// replace class name
+						preg_match('#class (.*?)[\n]#m', $xclassContent, $matchesClass);
+                        $xclassContent = preg_replace('#class (.*?)[\n]#m', "class {$xclassName} extends \\{$originalClassFullName}"
+							// if there's bracket on end of the line, put it there back
+							. (strpos($matchesClass[0], '{') ? ' {' : '')  . "\n", $xclassContent);
+						$result_xclassUpdate = file_put_contents($xclassSavePath . $xclassFilename, $xclassContent);
+                    	$this->msg("Update class file status: " . json_encode((bool) $result_xclassUpdate) . (!$result_xclassUpdate ? ' - Write problem, check permissions' : ''), $result_xclassUpdate ? 'info' : 'error');
+					}
+				}
+				else	{
+					$this->msg("Class file {$xclassSavePath}{$xclassFilename} already exists!", 'error');
+				}
+				break;
+		}
+
+		// put config with xclass register
+		// make dir structure
+        if (!is_dir($localconfSavePath))	{
+
+        	// sometimes there's situation where ext directories are in lowercase like original keys, instead of UpperCamel. on windows docker it might cause a problem
+			// where a single-word ext like "core" should be in "Core" dir but "core" already exists and is_dir returns false, but mkdir can't make this dir
+			$localconfSavePathTest = str_replace('/'.$originalNamespaceExtKey.'/', '/'.strtolower($originalNamespaceExtKey).'/', $localconfSavePath);
+            if (is_dir($localconfSavePathTest))	{
+                $localconfSavePath = $localconfSavePathTest;
+            	$this->msg("Found lowercase config directory structure: " . $localconfSavePathTest, 'info');
+			}
+			else	{
+            	$mkdirLocalconfResult = mkdir($localconfSavePath, 0777, true);
+            	$this->msg("Make config directory structure: " . json_encode($mkdirLocalconfResult) /* . (!$mkdirLocalconfResult ? '' : '')*/, $mkdirLocalconfResult ? 'info' : 'error');
+			}
+        }
+		// create ext_localconf if not exists
+        if (!file_exists($localconfSavePath . 'ext_localconf.php'))	{
+			$localconfContent = "<?php\n\n";
+			$result_localconfUpdate = file_put_contents($localconfSavePath . 'ext_localconf.php', $localconfContent);
+			$this->msg("Config file not found, create status: " . json_encode((bool) $result_localconfUpdate) . (!$result_localconfUpdate ? ' - Write problem, check permissions' : ''), $result_localconfUpdate ? 'info' : 'error');
+        }
+        // check again if file is there, before writing
+        if (file_exists($localconfSavePath . 'ext_localconf.php')) {
+            $localconfContentAdd = "
+
+\$GLOBALS['TYPO3_CONF_VARS']['SYS']['Objects'][\\{$originalClassFullName}::class] = [
+	'className' => \\{$xclassNamespace}\\{$xclassName}::class
+];
+
+";
+
+            // check if localconf has php closing tag on end and remove it to be able safely append new code on end
+            $localconfContent = file_get_contents($localconfSavePath . 'ext_localconf.php');
+            file_put_contents($localconfSavePath . 'ext_localconf.php', str_replace('?>', '', $localconfContent));
+
+        	// add our new config on end
+            $result_localconfUpdate = file_put_contents($localconfSavePath . 'ext_localconf.php', $localconfContentAdd, FILE_APPEND);
+            $this->msg("Update localconf file status: " . json_encode((bool) $result_localconfUpdate) . (!$result_localconfUpdate ? ' - Write problem, check permissions' : ''), $result_localconfUpdate ? 'info' : 'error');
+        }
+	}
 
 
 	/* exec shell command */
@@ -836,6 +983,47 @@ print $ret;*/
         }
 	    return $msg;
     }
+
+    /* try to find class namespace from given relative path / relative path from namespace. it needs autoload to be generated */
+    function mapClassNamespaceAndPath($pathRel = '', $namespace = '')	{
+
+    	// load autoload data
+		switch (TYPO3_MAJOR_BRANCH_VERSION)	{
+			case 7:
+				$autoloadPath = $this->PATH_site . 'typo3temp/autoload/autoload_classmap.php';
+				break;
+			case 8:
+			case 9:
+			default:
+				$autoloadPath = $this->PATH_site . 'typo3conf/autoload/autoload_classmap.php';
+		}
+		$autoloadTemp = (array) @include($autoloadPath);
+		$autoloadVendor = (array) @include($this->PATH_site . 'vendor/composer/autoload_classmap.php');
+		$autoloadAll = array_merge($autoloadTemp, $autoloadVendor);
+
+		// find NAMESPACE
+		if ($pathRel && !$namespace)	{
+			// strip path to proper project root dir if your IDE project root is one level higher (like it is by default on git or svn)
+            $originalClassFullPath = str_replace(['htdocs/', 'trunk/'], '', $_POST['originalClassFullPath']);
+			// make sure to strip leading slash
+            $originalClassFullPath = ltrim($originalClassFullPath, '/');
+			// vendorDir & baseDir are defined in vendor classmap
+			if (isset($baseDir) && isset($vendorDir))
+            	$originalClassFullPath = str_replace(['typo3/sysext/', 'typo3conf/', 'vendor/'], [$baseDir.'/typo3/sysext/', $this->PATH_site.'typo3conf/', $vendorDir.'/'], $originalClassFullPath);
+			else
+                $originalClassFullPath = $this->PATH_site . $originalClassFullPath;
+			$namespace = array_search($originalClassFullPath, $autoloadAll);
+			return $namespace;
+		}
+
+		// find PATH
+		if ($namespace && !$pathRel)	{
+			$path = $autoloadAll[$namespace];
+			$pathRel = str_replace($this->PATH_site, '', $path);
+			return $pathRel;
+		}
+		//Throw new Exception('mapClassNamespaceAndPath(): Wrong use, bad params!');	// no exception handling for now. maybe one day
+	}
 
 
 	// TEMPLATING
@@ -1261,6 +1449,66 @@ PATH_dump = <?php  print PATH_dump;  ?>
                                                         <label>". $Dump->formField_radio('databaseQuery_method', Dump::DATABASE_QUERY_METHOD__CLI, $Dump->options['defaultDatabaseQueryMethod'])
                                                             . "CLI - command line bin execute</label>
                                                     </div>";
+                                            }
+                                        ],
+                                    ],
+                                ],
+                                [
+                                    'label' => 'Generate XClass',
+                                    'name' => 'generateXclass',
+                                    'options' => [
+                                        [
+                                            'label' => 'Generate extension class',
+                                            'content' => function() use ($Dump) {
+												if ($_POST['prefill'])	{
+													// put data into post array to not have to pass this to action preview
+                                                    $_POST['originalClassFullName'] = 	$_POST['originalClassFullName'] ?: $Dump->mapClassNamespaceAndPath($_POST['originalClassFullPath']);
+                                                    $_POST['extSaveXclassKey'] = 		$_POST['extSaveXclassKey'] ?: 't3_local';
+                                                    $_POST['extSaveXclassNamespace'] = 	$_POST['extSaveXclassNamespace'] ?: 'Q3i\\T3Local';	// todo: try to detect
+													// runs action in preview mode
+													$Dump->runAction();
+                                                    $additionalInfo = $Dump->displayMessages();
+												}
+
+                                                $originalClassFullName = 	$_POST['originalClassFullName'];
+                                                $originalClassFullPath = 	$_POST['originalClassFullPath'];
+                                                $extSaveXclassKey = 		$_POST['extSaveXclassKey'];
+                                                $extSaveXclassNamespace = 	$_POST['extSaveXclassNamespace'];
+
+                                                $code = "
+                                                    <p>
+                                                        <i>Generates extension class and registers it using ".'$GLOBALS[\'TYPO3_CONF_VARS\'][\'SYS\'][\'Objects\']'."</i>
+                                                        {$Dump->displayTooltip('todo: description'.chr(10)
+                                                                                )}
+                                                    </p>
+                                                    
+                                                    <div{$Dump->checkFieldError_printClass('originalClassFullName', 'form-row')}>
+                                                        <label>Class NAME (full namespace) to extend:</label>
+                                                        <input name='originalClassFullName' id='originalClassFullName' value='{$originalClassFullName}' type='text' style='width: 100%'>
+                                                    </div>
+                                                    <div class='form-row'>
+                                                        <label>...OR class PATH to detect namespace:</label>
+                                                        <input name='originalClassFullPath' id='originalClassFullPath' value='{$originalClassFullPath}' type='text' style='width: 100%'>
+                                                    </div>
+                                                    <div class='form-row'>
+                                                        <label>Ext to store XClass:</label>
+                                                        Key: 		<input name='extSaveXclassKey' id='extSaveXclassKey' value='{$extSaveXclassKey}' type='text'>
+                                                        Namespace:	<input name='extSaveXclassNamespace' id='extSaveXclassNamespace' value='{$extSaveXclassNamespace}' type='text'>
+                                                    </div>
+                                                    <div class='form-row form-row-radio'>
+                                                        <label>". $Dump->formField_radio('xclassGenerate_method', 'copy', 'copy')
+                                                    . "Copy original class</label>
+                                                        <label>". $Dump->formField_radio('xclassGenerate_method', 'empty', 'copy')
+                                                    . "Generate empty</label>
+                                                    </div>
+                                                    <div class='form-row'>
+                                                    	<input type='submit' name='prefill' value='Prefill form'>
+                                                    </div>
+                                                    <div>
+                                                    	{$additionalInfo}
+													</div>
+                                                    ";
+                                                return $code;
                                             }
                                         ],
                                     ],
