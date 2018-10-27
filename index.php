@@ -29,7 +29,7 @@
 
 
 
-define ('DUMP_VERSION', '3.2.0-beta');
+define ('DUMP_VERSION', '3.2.0-beta2');
 
 
 
@@ -650,8 +650,9 @@ class Dump  {
 
         // make class directory structure
         if (!is_dir($xclassSavePath))	{
-            $mkdirResult = mkdir($xclassSavePath, 0777, true);
-            $this->msg("Make class directory structure: " . json_encode($mkdirResult) /* . (!$mkdirResult ? '' : '')*/, $mkdirResult ? 'info' : 'error');
+			$this->msg("Make class directory structure: {$xclassSavePath}", 'info');
+            if (!mkdir($xclassSavePath, 0777, true))
+            	$this->msg("- error: Cannot create dir!", 'error');
         }
 
         $xclassFilename = $xclassName . ".php";
@@ -660,6 +661,8 @@ class Dump  {
         // make empty or copy original class
 		switch ($_POST['xclassGenerate_method'])	{
 			case 'empty':
+                $this->msg("Generate empty XClass: {$xclassSavePath}{$xclassFilename}", 'info');
+
 				// create empty class with proper name, namespace and class operator (class ... extends ...)
                 if (!file_exists($xclassSavePath . $xclassFilename))	{
                     $xclassContent = "<?php
@@ -671,30 +674,28 @@ class {$xclassName} extends \\{$originalClassFullName}	{
 }
 
 ";
-                    $result_xclassUpdate = file_put_contents($xclassSavePath . $xclassFilename, $xclassContent);
-                    $this->msg("Update class file status: " . json_encode((bool) $result_xclassUpdate) . (!$result_xclassUpdate ? ' - Write problem, check permissions' : ''), $result_xclassUpdate ? 'info' : 'error');
+					// todo: copy all "use" namespaces from original class - it's handy to have them there anyway
+                    if (!file_put_contents($xclassSavePath . $xclassFilename, $xclassContent))
+                    	$this->msg("- error: Update XClass file problem, check write permissions", 'error');
                 }
                 else	{
-                    $this->msg("Class file {$xclassSavePath}{$xclassFilename} already exists!", 'error');
+                    $this->msg("- error: XClass file already exists!", 'error');
                 }
                 break;
 
 			case 'copy':
 			default:
-				// get original class to extend, copy it to your ext's Classes dir, modify namespace and class operator line
-				$originalClassPath = $this->mapClassNamespaceAndPath('', $originalClassFullName);
                 $this->msg("Copy class to xclass file: {$xclassSavePath}{$xclassFilename}", 'info');
 
-				if (!file_exists($xclassSavePath . $xclassFilename))	{
-					$result_xclassCopy = copy($this->PATH_site . $originalClassPath, $xclassSavePath . $xclassFilename);
-                    $this->msg("Copy status: " . json_encode($result_xclassCopy) . (!$result_xclassCopy ? ' - Check directory structure or write permissions' : ''), $result_xclassCopy ? 'info' : 'error');
+				// get original class to extend, copy it to your ext's Classes dir, modify namespace and class operator line
+				$originalClassPath = $this->mapClassNamespaceAndPath('', $originalClassFullName);
 
-                    // modify copied file contents
-                    if ($result_xclassCopy)	{
+				if (!file_exists($xclassSavePath . $xclassFilename))	{
+					if (copy($this->PATH_site . $originalClassPath, $xclassSavePath . $xclassFilename))	{
+                    	// modify copied file contents
 						$xclassContent = file_get_contents($xclassSavePath . $xclassFilename);
 
 						// replace namespace
-						///preg_match('#namespace (.*?)#gm', $xclassContent, $matchesNamespace);
                         $xclassContent = preg_replace('#namespace (.*?)[\n]#m', "namespace {$xclassNamespace};\n", $xclassContent);
 
 						// replace class name
@@ -702,12 +703,16 @@ class {$xclassName} extends \\{$originalClassFullName}	{
                         $xclassContent = preg_replace('#class (.*?)[\n]#m', "class {$xclassName} extends \\{$originalClassFullName}"
 							// if there's bracket on end of the line, put it there back
 							. (strpos($matchesClass[0], '{') ? ' {' : '')  . "\n", $xclassContent);
-						$result_xclassUpdate = file_put_contents($xclassSavePath . $xclassFilename, $xclassContent);
-                    	$this->msg("Update class file status: " . json_encode((bool) $result_xclassUpdate) . (!$result_xclassUpdate ? ' - Write problem, check permissions' : ''), $result_xclassUpdate ? 'info' : 'error');
+
+						if (!file_put_contents($xclassSavePath . $xclassFilename, $xclassContent))
+                    		$this->msg("- error: Update class write problem, check permissions", 'error');
 					}
+                    else	{
+                        $this->msg("- error: Copy problem! - Check directory structure or write permissions", 'error');
+                    }
 				}
 				else	{
-					$this->msg("Class file {$xclassSavePath}{$xclassFilename} already exists!", 'error');
+					$this->msg("- error: Class file already exists!", 'error');
 				}
 				break;
 		}
@@ -721,18 +726,22 @@ class {$xclassName} extends \\{$originalClassFullName}	{
 			$localconfSavePathTest = str_replace('/'.$originalNamespaceExtKey.'/', '/'.strtolower($originalNamespaceExtKey).'/', $localconfSavePath);
             if (is_dir($localconfSavePathTest))	{
                 $localconfSavePath = $localconfSavePathTest;
-            	$this->msg("Found lowercase config directory structure: " . $localconfSavePathTest, 'info');
+            	$this->msg("Found lowercase config directory structure: " . $localconfSavePathTest . ' - using this one.', 'info');
 			}
 			else	{
-            	$mkdirLocalconfResult = mkdir($localconfSavePath, 0777, true);
-            	$this->msg("Make config directory structure: " . json_encode($mkdirLocalconfResult) /* . (!$mkdirLocalconfResult ? '' : '')*/, $mkdirLocalconfResult ? 'info' : 'error');
+            	$this->msg("Make config directory structure: " . $localconfSavePath, 'info');
+            	if (!mkdir($localconfSavePath, 0777, true))
+            		$this->msg("- error: Cannot make config directory structure", 'error');
 			}
         }
+
+
 		// create ext_localconf if not exists
         if (!file_exists($localconfSavePath . 'ext_localconf.php'))	{
 			$localconfContent = "<?php\n\n";
-			$result_localconfUpdate = file_put_contents($localconfSavePath . 'ext_localconf.php', $localconfContent);
-			$this->msg("Config file not found, create status: " . json_encode((bool) $result_localconfUpdate) . (!$result_localconfUpdate ? ' - Write problem, check permissions' : ''), $result_localconfUpdate ? 'info' : 'error');
+			$this->msg("Config file not found, create: " . $localconfSavePath . 'ext_localconf.php', 'info');
+			if (!file_put_contents($localconfSavePath . 'ext_localconf.php', $localconfContent))
+				$this->msg("- error: Config file create problem, check permissions", 'error');
         }
         // check again if file is there, before writing
         if (file_exists($localconfSavePath . 'ext_localconf.php')) {
@@ -749,8 +758,9 @@ class {$xclassName} extends \\{$originalClassFullName}	{
             file_put_contents($localconfSavePath . 'ext_localconf.php', str_replace('?>', '', $localconfContent));
 
         	// add our new config on end
-            $result_localconfUpdate = file_put_contents($localconfSavePath . 'ext_localconf.php', $localconfContentAdd, FILE_APPEND);
-            $this->msg("Update localconf file status: " . json_encode((bool) $result_localconfUpdate) . (!$result_localconfUpdate ? ' - Write problem, check permissions' : ''), $result_localconfUpdate ? 'info' : 'error');
+			$this->msg("Update localconf: " . $localconfSavePath . 'ext_localconf.php','info');
+            if (!file_put_contents($localconfSavePath . 'ext_localconf.php', $localconfContentAdd, FILE_APPEND))
+            	$this->msg("- error: Update localconf file write problem, check permissions", 'error');
         }
 	}
 
@@ -1477,9 +1487,11 @@ PATH_dump = <?php  print PATH_dump;  ?>
 
                                                 $code = "
                                                     <p>
-                                                        <i>Generates extension class and registers it using ".'$GLOBALS[\'TYPO3_CONF_VARS\'][\'SYS\'][\'Objects\']'."</i>
-                                                        {$Dump->displayTooltip('todo: description'.chr(10)
-                                                                                )}
+                                                        <i>Generates extension class and registers it using \$GLOBALS['TYPO3_CONF_VARS']['SYS']['Objects']'<br>
+                                                        	Enter class name or project-relative class file path and click 'Prefill form'.</i>
+                                                        {$Dump->displayTooltip('Basically it copies class and renames it, or puts new empty class which extends original, '.chr(10)
+                                                        	. 'then puts register into EXT:your_ext/Configuration/[OriginalExt]/ext_localconf.php' . chr(10)
+                                                        	. 'It\'s designed for lazy people like me.' . chr(10)	)}
                                                     </p>
                                                     
                                                     <div{$Dump->checkFieldError_printClass('originalClassFullName', 'form-row')}>
