@@ -29,7 +29,7 @@
 
 
 
-define ('DUMP_VERSION', '3.2.0-beta2');
+define ('DUMP_VERSION', '3.3.0-beta1');
 
 
 
@@ -617,7 +617,7 @@ class Dump  {
      */
 	private function action_xClassGenerate($previewInfo = false)	{
 
-        $originalClassFullName = $_POST['originalClassFullName'];
+        $originalClassFullName = $_POST['originalClassFullName'] ?: $this->mapClassNamespaceAndPath($_POST['originalClassFullPath']);
 		$originalClassNamespaceParts = explode('\\', $originalClassFullName);
         $originalClassName = array_pop($originalClassNamespaceParts);
 		$originalVendor = array_shift($originalClassNamespaceParts);
@@ -663,11 +663,20 @@ class Dump  {
 			case 'empty':
                 $this->msg("Generate empty XClass: {$xclassSavePath}{$xclassFilename}", 'info');
 
+				// get original class to extend, to copy some contents
+				$originalClassPath = $this->mapClassNamespaceAndPath('', $originalClassFullName);
+				$originalClassContent = file_get_contents($this->PATH_site . $originalClassPath);
+				preg_match_all('/use (.*?);/', $originalClassContent, $contentUseNamespace);
+				$useNamespaces = implode("\n", $contentUseNamespace[0]);
+
 				// create empty class with proper name, namespace and class operator (class ... extends ...)
                 if (!file_exists($xclassSavePath . $xclassFilename))	{
                     $xclassContent = "<?php
 
 namespace {$xclassNamespace};
+
+{$useNamespaces}
+
 
 class {$xclassName} extends \\{$originalClassFullName}	{
 	
@@ -1000,21 +1009,22 @@ print $ret;*/
     	// load autoload data
 		switch (TYPO3_MAJOR_BRANCH_VERSION)	{
 			case 7:
-				$autoloadPath = $this->PATH_site . 'typo3temp/autoload/autoload_classmap.php';
+				$autoloadPath = $this->PATH_site . 'typo3temp/autoload/';
 				break;
 			case 8:
 			case 9:
 			default:
-				$autoloadPath = $this->PATH_site . 'typo3conf/autoload/autoload_classmap.php';
+				$autoloadPath = $this->PATH_site . 'typo3conf/autoload/';
 		}
-		$autoloadTemp = (array) @include($autoloadPath);
+		$autoloadTemp = (array) @include($autoloadPath . 'autoload_classmap.php');
+		$autoloadPSR4 = (array) @include($autoloadPath . 'autoload_psr4.php');
 		$autoloadVendor = (array) @include($this->PATH_site . 'vendor/composer/autoload_classmap.php');
 		$autoloadAll = array_merge($autoloadTemp, $autoloadVendor);
 
 		// find NAMESPACE
 		if ($pathRel && !$namespace)	{
 			// strip path to proper project root dir if your IDE project root is one level higher (like it is by default on git or svn)
-            $originalClassFullPath = str_replace(['htdocs/', 'trunk/'], '', $_POST['originalClassFullPath']);
+            $originalClassFullPath = str_replace(['htdocs/', 'trunk/', 'httpdocs/', 'public_html/'], '', $_POST['originalClassFullPath']);
 			// make sure to strip leading slash
             $originalClassFullPath = ltrim($originalClassFullPath, '/');
 			// vendorDir & baseDir are defined in vendor classmap
@@ -1023,14 +1033,31 @@ print $ret;*/
 			else
                 $originalClassFullPath = $this->PATH_site . $originalClassFullPath;
 			$namespace = array_search($originalClassFullPath, $autoloadAll);
-			return $namespace;
+			if ($namespace)
+			    return $namespace;
+
+			// try to find in PSR4
+			list($originalClassFullPath_extDir, $originalClassFullPath_classFilePath) = explode('Classes/', $originalClassFullPath);
+			// the keys point to the Classes dir, not files itself, so try to find this path (is in array!)
+            $psr4NamespaceExt = array_search([$originalClassFullPath_extDir . 'Classes'], $autoloadPSR4);
+            // build rest of namespace
+            $namespace = $psr4NamespaceExt . str_replace(['/', '.php'], ['\\', ''], $originalClassFullPath_classFilePath);
+            return $namespace;
 		}
 
 		// find PATH
 		if ($namespace && !$pathRel)	{
 			$path = $autoloadAll[$namespace];
 			$pathRel = str_replace($this->PATH_site, '', $path);
-			return $pathRel;
+			if ($pathRel)
+			    return $pathRel;
+
+			// try to find in PSR4
+            $namespaceParts = explode('\\', $namespace);
+            // get two first parts
+            $extPath_classes = $autoloadPSR4[ implode('\\', array_slice($namespaceParts, 0, 2)) . '\\' ];
+            $path = $extPath_classes[0] . '/' . implode('/', array_slice($namespaceParts, 2)) . '.php';
+            return str_replace($this->PATH_site, '', $path);
 		}
 		//Throw new Exception('mapClassNamespaceAndPath(): Wrong use, bad params!');	// no exception handling for now. maybe one day
 	}
