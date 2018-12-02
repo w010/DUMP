@@ -29,7 +29,7 @@
 
 
 
-define ('DUMP_VERSION', '3.3.0-beta1');
+define ('DUMP_VERSION', '3.3.1');
 
 
 
@@ -469,7 +469,7 @@ class Dump  {
 		// dziala w dockerze prawidlowo
 		$cmd = "tar -C \"{$this->PATH_site}\" -zcf {$dumpFilename}-v{$this->projectVersion}.tgz ";
 
-		if (!$all  &&  !$_POST['omitTablesIncludeInQuery']) {
+		if (!$all  &&  !$_POST['ignoreSelectionAndPackAll']) {
 
 			$included = is_array($_POST['filenameSelectionInclude']) ? $_POST['filenameSelectionInclude'] : [];
 			$excluded = is_array($_POST['filenameSelectionExclude']) ? $_POST['filenameSelectionExclude'] : [];
@@ -1205,26 +1205,31 @@ print $ret;*/
         // make input box enabled/disabled depending on checkbox checked
         document.addEventListener('DOMContentLoaded', function(e) {
             toggleInput('omitTablesIncludeInQuery', 'omitTables');
+            toggleInput('ignoreSelectionAndPackAll', 'filenameSelectionInclude');
+            toggleInput('ignoreSelectionAndPackAll', 'filenameSelectionExclude');
         });
 
         // select text inside a node
         function selectText(containerId) {
+            var range;
             if (document.selection) {
-                var range = document.body.createTextRange();
+                range = document.body.createTextRange();
                 range.moveToElementText(document.getElementById(containerId));
                 range.select();
             } else if (window.getSelection()) {
-                var range = document.createRange();
+                range = document.createRange();
                 range.selectNode(document.getElementById(containerId));
                 window.getSelection().removeAllRanges();
                 window.getSelection().addRange(range);
             }
         }
-        function toggleInput(triggerId, inputId)   {
+        function toggleInput(triggerId, inputId, reverse)   {
             var trigger = document.getElementById(triggerId);
             var input = document.getElementById(inputId);
-            if (trigger.checked)     input.disabled = false;
-            else                     input.disabled = true;
+            if (reverse ? !trigger.checked : trigger.checked)
+                input.disabled = false;
+            else
+                input.disabled = true;
         }
     </script>
 </head>
@@ -1300,7 +1305,9 @@ PATH_dump = <?php  print PATH_dump;  ?>
                                             'class' => 'selector-tables',
                                             'content' => function() use ($Dump) {
                                                 $code = "<div class='form-row form-row-checkbox'><label>
-                                                            <input type='checkbox' name='omitTablesIncludeInQuery' id='omitTablesIncludeInQuery' onclick='toggleInput(\"omitTablesIncludeInQuery\", \"omitTables\");'" . ($_POST['omitTablesIncludeInQuery'] ? " checked" : '') . ">
+                                                            <input type='checkbox' name='omitTablesIncludeInQuery' id='omitTablesIncludeInQuery' 
+                                                            	onclick='toggleInput(\"omitTablesIncludeInQuery\", \"omitTables\");'"
+																. ($_POST['omitTablesIncludeInQuery'] ? " checked" : '') . ">
                                                             Omit these tables (export only structure):</label>
                                                         </div>
                                                         <div class='form-row'>
@@ -1352,7 +1359,10 @@ PATH_dump = <?php  print PATH_dump;  ?>
                                                         <div class='clear'></div>
                                                     </div>
                                                     <div class='form-row form-row-checkbox'>
-                                                        <label><input type='checkbox' name='omitTablesIncludeInQuery'".($_POST['omitTablesIncludeInQuery'] ? " checked" : '').">Ignore selection and pack all</label>
+                                                        <label><input type='checkbox' id='ignoreSelectionAndPackAll' name='ignoreSelectionAndPackAll'
+                                                        	onclick='toggleInput(\"ignoreSelectionAndPackAll\", \"filenameSelectionInclude\", true); toggleInput(\"ignoreSelectionAndPackAll\", \"filenameSelectionExclude\", true);'"
+															. ($_POST['ignoreSelectionAndPackAll'] ? " checked" : '').">
+                                                        	Ignore selection and pack all</label>
                                                     </div>";
                                                 return $code;
                                             }
