@@ -29,7 +29,7 @@
 
 
 
-define ('DUMP_VERSION', '3.3.1');
+define ('DUMP_VERSION', '3.3.2');
 
 
 
@@ -618,6 +618,8 @@ class Dump  {
 	private function action_xClassGenerate($previewInfo = false)	{
 
         $originalClassFullName = $_POST['originalClassFullName'] ?: $this->mapClassNamespaceAndPath($_POST['originalClassFullPath']);
+        // strip leading backslash if exists, to keep proper segment number after exploding
+        $originalClassFullName = ltrim($originalClassFullName, '\\');
 		$originalClassNamespaceParts = explode('\\', $originalClassFullName);
         $originalClassName = array_pop($originalClassNamespaceParts);
 		$originalVendor = array_shift($originalClassNamespaceParts);
