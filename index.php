@@ -25,11 +25,12 @@
  * todo:
  * conf: omit tables, include directories - make them work also as linebreak-separated lists instead of array
  * password in mysqldump and other params should be in single quotes (makes problems ie. when ! is in password and double quotes are used)
+ * "Archive filesystem" fix linked checkbox "Ignore selection" with dir selectors deactivity (now are disabled but checkbox is unchecked)
  */
 
 
 
-define ('DUMP_VERSION', '3.3.2');
+define ('DUMP_VERSION', '3.4.0');
 
 
 
@@ -492,6 +493,9 @@ class Dump  {
 			$cmd .= ' .  --exclude="DUMP" --exclude-vcs';
 		}
 
+		if ($_POST['dereferenceSymlinks'])	{
+            $cmd .= ' --dereference';
+		}
 
 		$this->exec_control($cmd);
 		/* $this->exec_control ('tar -zcf '.{$this->PATH_site}.'DUMP/'.$dumpFilename.'-v'.$this->projectVersion.'.tgz ./../* --exclude="typo3temp" --exclude="DUMP" --exclude="uploads" -exclude="typo3_src-*"  '); */
@@ -952,7 +956,7 @@ print $ret;*/
 
 	/* list files */
 	function getFilesFromDirectory($dir = 'DUMP', $ext = 'sql') {
-		$files = glob('*.' . $ext);
+		$files = glob('*.{' . $ext . '}', GLOB_BRACE);	// GLOB_BRACE: match multiple patterns in {comma,list}. NOTE that it's not regexp!
 		if (!is_array($files))  $files = [];
 		return $files;
 	}
@@ -1365,6 +1369,13 @@ PATH_dump = <?php  print PATH_dump;  ?>
                                                         	onclick='toggleInput(\"ignoreSelectionAndPackAll\", \"filenameSelectionInclude\", true); toggleInput(\"ignoreSelectionAndPackAll\", \"filenameSelectionExclude\", true);'"
 															. ($_POST['ignoreSelectionAndPackAll'] ? " checked" : '').">
                                                         	Ignore selection and pack all</label>
+                                                    </div>
+                                                    <div class='form-row form-row-checkbox'>
+                                                        <label><input type='checkbox' id='dereferenceSymlinks' name='dereferenceSymlinks'"
+                                                        	. ($_POST['dereferenceSymlinks'] ? " checked" : '').">
+                                                        	Dereference symlinks ".$Dump->displayTooltip(
+																'adds --dereference (-h) to tar command, to archive symlink targets instead of only symlink pointers'
+                                                        	) . "</label>
                                                     </div>";
                                                 return $code;
                                             }
@@ -1381,6 +1392,36 @@ PATH_dump = <?php  print PATH_dump;  ?>
 	                                    ],
                                     ],
                                 ],
+								[
+									'label' => 'List dump files',
+									'name' => 'list_dumps',
+									'options' => [
+										[
+											'label' => 'List dump files ',
+											'content' => function() use ($Dump) {
+                            					$files = $Dump->getFilesFromDirectory('DUMP', 'sql,tgz,tar,zip,rar');
+                            					$filesContent = '';
+
+                            					if (count($files)) foreach($files as $file)	{
+                                                    // human readable size snippet
+                                                    $sz = 'BKMGTP';
+                                                    $bytes = filesize(PATH_dump . $file);
+                                                    $factor = floor((strlen($bytes) - 1) / 3);
+                                                    $filesContent .= '<li><a href="' . $file . '">' . $file . ' (' .
+														sprintf("%.2f", $bytes / pow(1024, $factor)) . @$sz[$factor]
+														. ')</a></li>';
+												}
+
+                            					$code = '<p><i>Download files from DUMP directory</i></p>'
+                                                . '<ul>'
+                                                	. $filesContent
+                                                . '</ul>';
+
+                            					return $code;
+											}
+										],
+									],
+								],
                                 [
                                     'label' => 'Backup project dir',
                                     'name' => 'backup',
