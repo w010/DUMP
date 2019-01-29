@@ -30,7 +30,7 @@
 
 
 
-define ('DUMP_VERSION', '3.4.0');
+define ('DUMP_VERSION', '3.4.1');
 
 
 
@@ -200,8 +200,9 @@ switch (TYPO3_MAJOR_BRANCH_VERSION)    {
 //if (!defined('DEV'))				  define('DEV',   false);
 //if (!defined('LOCAL'))			  define('LOCAL', false);
 
-if (!defined('TYPO3_CONTEXT'))      define('TYPO3_CONTEXT',     getenv('TYPO3_CONTEXT'));
-if (!defined('INSTANCE_CONTEXT'))   define('INSTANCE_CONTEXT',  getenv('INSTANCE_CONTEXT'));
+// set contexts as const for shorthand. use defined env var, if not found check old projects fallback to GLOBALS
+if (!defined('TYPO3_CONTEXT'))      define('TYPO3_CONTEXT',     getenv('TYPO3_CONTEXT') ? getenv('TYPO3_CONTEXT') : $GLOBALS["STAGE_IDENTIFIER"]);
+if (!defined('INSTANCE_CONTEXT'))   define('INSTANCE_CONTEXT',  getenv('INSTANCE_CONTEXT') ? getenv('INSTANCE_CONTEXT') : $GLOBALS["CONTEXT_IDENTIFIER"]);
 
 
 // reinclude config (overwrite settings which uses conditions on some constants defined above)
