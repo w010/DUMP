@@ -30,7 +30,7 @@
 
 
 
-define ('DUMP_VERSION', '3.4.1');
+define ('DUMP_VERSION', '3.4.2');
 
 
 
@@ -1248,11 +1248,8 @@ print $ret;*/
 
 
     <div class="config">
-		<pre>
-PATH_site = <?php  print PATH_site;  ?>
-
-PATH_dump = <?php  print PATH_dump;  ?>
-		</pre>
+		<pre>PATH_site = <span id="pre_path_site" onclick="selectText('pre_path_site');"><?php  print PATH_site;  ?></span></pre>
+		<pre>PATH_dump = <span id="pre_path_dump" onclick="selectText('pre_path_dump');"><?php  print PATH_dump;  ?></span></pre>
 
 		<?php  print $Dump->configInfoHeader;	 ?>
     </div>
