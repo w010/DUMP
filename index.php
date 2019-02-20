@@ -1692,7 +1692,7 @@ print $ret;*/
 	<footer>
 		<i>DUMP (Damn Usable Management Program)<br>
             Database and filesystem migration tool for TYPO3<br>
-            WTP - wolo.pl '.' studio 2013-2018<br>
+            WTP - wolo.pl '.' studio 2013-2019<br>
             v<?php print DUMP_VERSION; ?>
         </i>
 	</footer>
