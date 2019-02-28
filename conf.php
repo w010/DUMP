@@ -9,6 +9,9 @@
 
 defined ('DUMP_VERSION') or die ('DUMP Config: Access denied.');
 
+// in some projects there's need to include some missing classes which are used in AdditionalConfiguration
+//require_once('../typo3/sysext/core/Classes/Log/LogLevel.php');
+
 
 /*
  * in case of problems with native base typo3 init, define branch version here and disable init using dontUseTYPO3Init => true

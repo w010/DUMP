@@ -30,11 +30,16 @@
 
 
 
-define ('DUMP_VERSION', '3.4.2');
+define ('DUMP_VERSION', '3.4.3');
 
 
 
 error_reporting(E_ALL ^ E_NOTICE ^ E_WARNING ^ E_STRICT ^ E_DEPRECATED);
+// on some projects / envs might be needed to see what's happening when you 500)
+//error_reporting(-1); // reports all errors
+//ini_set('display_errors', '1'); // shows all errors
+//ini_set('log_errors', 1);
+
 
 
 

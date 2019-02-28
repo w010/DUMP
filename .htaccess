@@ -9,3 +9,19 @@ AuthName "wtp dump: admin only"
 AuthUserFile "D:\WORK\___projects\WTP3\DUMP\.htpasswd"
 #Require valid-user
 Require user dump
+
+
+# Access block for files - restore, allow to download all from this dir
+#<FilesMatch ^>
+#	# Apache < 2.3
+#	<IfModule !mod_authz_core.c>
+#		Order allow,deny
+#		allow from all
+#		Satisfy All
+#	</IfModule>
+
+#	# Apache ≥ 2.3
+#	<IfModule mod_authz_core.c>
+#		Require all granted
+#	</IfModule>
+#</FilesMatch>
