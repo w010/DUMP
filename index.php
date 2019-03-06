@@ -30,7 +30,7 @@
 
 
 
-define ('DUMP_VERSION', '3.4.3');
+define ('DUMP_VERSION', '3.4.4');
 
 
 
@@ -984,8 +984,18 @@ print $ret;*/
 		return chr(10) . implode (chr(10), $this->getFilesFromDirectory());
 	}
 
+	/* check if is runinng on docker (local-docker, local_docker etc.) */
+	static function isDocker()	{
+		if (defined('INSTANCE_CONTEXT'))	{
+			return strstr(INSTANCE_CONTEXT, 'docker');
+		}
+		return false;
+	}
+
 	/* tries to extract container name from docker config dir */
 	static function detectDockerContainerName($containerType, $dockerEnv = '') {
+		if (!static::isDocker())
+			return '';
 	    $filename = '../_docker/php_proxy' . ($dockerEnv ? '__'.$dockerEnv : '') . '.sh';
 	    if (file_exists($filename))  {
             $filecontent = file_get_contents($filename);

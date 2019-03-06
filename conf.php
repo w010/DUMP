@@ -1,7 +1,7 @@
 <?php
 /**
  * DUMP - WTP DUMP/BACKUP TOOL FOR TYPO3 - wolo.pl '.' studio
- * 2013-2018
+ * 2013-2019
  *
  * Remember that this conf is included twice (before init and after to make the constant conditions work)
  * so if you need to define any constants always check if they are defined already
@@ -9,14 +9,22 @@
 
 defined ('DUMP_VERSION') or die ('DUMP Config: Access denied.');
 
-// in some projects there's need to include some missing classes which are used in AdditionalConfiguration
-//require_once('../typo3/sysext/core/Classes/Log/LogLevel.php');
+
+/**
+ * config compatible with:
+ * 3.4.4
+ */
 
 
 /*
  * in case of problems with native base typo3 init, define branch version here and disable init using dontUseTYPO3Init => true
  */
 //defined('T3_MAJOR_BRANCH_VERSION') or define('T3_MAJOR_BRANCH_VERSION', 7);
+
+/*
+ * in some projects there's need to include some missing classes which are used in AdditionalConfiguration
+ */
+//require_once('../typo3/sysext/core/Classes/Log/LogLevel.php');
 
 
 
@@ -47,9 +55,9 @@ $optionsCustom = [
 
 
 	// generates command lines prepended with "docker exec -it [containername]"
-	'docker' => INSTANCE_CONTEXT == 'local-docker' ?: false,
-	'docker_containerSql' => INSTANCE_CONTEXT == 'local-docker' ?  Dump::detectDockerContainerName('mysql')  :  '',
-	'docker_containerPhp' => INSTANCE_CONTEXT == 'local-docker' ?  Dump::detectDockerContainerName('php')  :  '',
+	'docker' => Dump::isDocker(),
+	'docker_containerSql' => Dump::detectDockerContainerName('mysql'),
+	'docker_containerPhp' => Dump::detectDockerContainerName('php'),
 
 
 	// urls of files to fetch will have the domain replaced with this one
