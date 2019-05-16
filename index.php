@@ -30,14 +30,14 @@
 
 
 
-define ('DUMP_VERSION', '3.4.4');
+define ('DUMP_VERSION', '3.4.5');
 
 
 
 error_reporting(E_ALL ^ E_NOTICE ^ E_WARNING ^ E_STRICT ^ E_DEPRECATED);
 // on some projects / envs might be needed to see what's happening when you 500)
 //error_reporting(-1); // reports all errors
-//ini_set('display_errors', '1'); // shows all errors
+ini_set('display_errors', '1'); // shows all errors
 //ini_set('log_errors', 1);
 
 
@@ -300,6 +300,9 @@ class Dump  {
 		}
 		$this->configInfoHeader .= '<p>- branch detected: <span class="info"><b>' . TYPO3_MAJOR_BRANCH_VERSION
             . (defined('TYPO3_version') ? '</b></span> / version: <b><span class="info">' . TYPO3_version . '</span></b>' : '') . '</b></span></p>';
+
+		$this->configInfoHeader .= '<p>- PHP: <span class="info"><b>' . phpversion() . '</b></span></p>';
+
 
 
 		// check if action is given if submitted
