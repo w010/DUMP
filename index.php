@@ -5,7 +5,7 @@
 
 /**
  *  WTP DUMP/BACKUP TOOL FOR TYPO3 - wolo.pl '.' studio
- *  2013-2018
+ *  2013-2019
  *
  *  Supported TYPO3 versions: 4, 6, 7, 8, 9
  */
@@ -30,7 +30,7 @@
 
 
 
-define ('DUMP_VERSION', '3.4.5');
+define ('DUMP_VERSION', '3.4.6');
 
 
 
@@ -440,6 +440,8 @@ class Dump  {
         // dziala na linux
 		// na win teoretycznie powinno tez ze stream output
 		//$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --skip-set-charset --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
+		// in case of encoding problems / if no SET NAMES in dump: use --set-charset
+		//$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --set-charset --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
 		$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
 			. $ignoredTablesPart
 			. "  >  \"{$this->PATH_dump}{$this->projectName}-v{$this->projectVersion}.sql\" "
@@ -1177,7 +1179,7 @@ print $ret;*/
 	<style type='text/css'>
         body    {font-family: Arial, Tahoma, sans-serif;}
 		label	{clear: both;   display: inline-block;}
-		label span	{float: left;   width: 260px;   cursor: pointer;}
+		.actions-selector > ul > li > label span	{float: left;   width: 260px;   cursor: pointer;}
 		label input	{float: left;   cursor: pointer;}
 		.actions li + label  {float: left;}
 		.clear	{clear: both;}
@@ -1200,7 +1202,7 @@ print $ret;*/
 		.form-row {display: block;  margin-bottom: 12px;}
         .form-row-checkbox label, .form-row-radio label {cursor: pointer;}
 		.selector-tables textarea   {overflow-wrap: normal;}
-		.predefined-sets a:not(:first-child):before	{content: ' | ';}
+		.predefined-sets span.link-set:not(:first-child):before	{content: '\00A0 | \00A0';}
 		footer	 {font-size: 80%;  margin-top: 70px;}
 		pre		 {line-height: 1.2em; white-space: pre-wrap;}
 		.config p	{margin: 8px 0;}
@@ -1255,6 +1257,10 @@ print $ret;*/
                 input.disabled = false;
             else
                 input.disabled = true;
+        }
+        function selectDomainsPredefinedSet(targetElementId, sourceElementId, setElementsCount) {
+            document.getElementById(targetElementId).innerHTML = document.getElementById(sourceElementId).innerHTML;
+            document.getElementById(targetElementId).rows = setElementsCount;
         }
     </script>
 </head>
@@ -1466,11 +1472,12 @@ print $ret;*/
                                                 $linksSetsTo = '';
                                                 foreach (is_array($Dump->options['updateDomains_defaultDomainSet']) ? $Dump->options['updateDomains_defaultDomainSet'] : [] as $domainSetKey => $domainSet)	{
                                                 	$domainSetId = 'placeholder_domainset_'.$domainSetKey;
-                                                    $domainSetOnclickFrom = "document.getElementById('domainsFrom').innerHTML = document.getElementById('".$domainSetId."').innerHTML; return false;";
-                                                    $domainSetOnclickTo = "document.getElementById('domainsTo').innerHTML = document.getElementById('".$domainSetId."').innerHTML; return false;";
-                                                    $linksSetsFrom .= '<a href="#" onclick="'.$domainSetOnclickFrom.'">'.$domainSetKey.'</a> '
+                                                	$domainSetCount = count(explode("\n", trim($domainSet)));
+                                                    $domainSetOnclickFrom = "selectDomainsPredefinedSet('domainsFrom', '{$domainSetId}', {$domainSetCount}); return false;";
+                                                    $domainSetOnclickTo = "selectDomainsPredefinedSet('domainsTo', '{$domainSetId}', {$domainSetCount}); return false;";
+                                                    $linksSetsFrom .= '<span class="link-set"><a href="#" onclick="'.$domainSetOnclickFrom.'">'.$domainSetKey.'</a></span> '
 															. '<div class="hidden" id="'.$domainSetId.'">'.trim($domainSet).'</div>';
-                                                    $linksSetsTo .= '<a href="#" onclick="'.$domainSetOnclickTo.'">'.$domainSetKey.'</a> '
+                                                    $linksSetsTo .= '<span class="link-set"><a href="#" onclick="'.$domainSetOnclickTo.'">'.$domainSetKey.'</a></span> '
                                                             . '<div class="hidden" id="'.$domainSetId.'">'.trim($domainSet).'</div>';
 												}
 												if ($linksSetsFrom)
@@ -1480,7 +1487,8 @@ print $ret;*/
 
 
                                                 $code = "
-                                                    <p><i>Replace domains in sys_domain records and pages external urls</i></p>
+                                                    <p><i>Replace domains in sys_domain records and pages external urls<br>
+                                                        Write linebreak-separated domains or choose predefined set </i></p>
                                                     <div{$Dump->checkFieldError_printClass('domainsFrom', 'form-row')}>
                                                         <label>Domains <b>FROM</b>:</label> 
                                                         {$linksSetsFrom}
