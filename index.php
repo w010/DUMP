@@ -30,7 +30,7 @@
 
 
 
-define ('DUMP_VERSION', '3.5.0');
+define ('DUMP_VERSION', '3.6.0');
 
 
 
@@ -104,19 +104,31 @@ if (file_exists('../typo3conf/localconf.php')  &&  !file_exists('../typo3conf/Lo
 // try to use native path and version detection, but without running many other initial things
 if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION')  ||  ( defined('TYPO3_MAJOR_BRANCH_VERSION')  &&  TYPO3_MAJOR_BRANCH_VERSION > 4 ) ) )  {
 
-    @include('../typo3/sysext/core/Classes/Core/SystemEnvironmentBuilder.php');
+    @include_once('../typo3/sysext/core/Classes/Core/SystemEnvironmentBuilder.php');
     @include_once('../typo3/sysext/core/Classes/Utility/GeneralUtility.php');
+	@include_once('../typo3/sysext/core/Classes/Core/Environment.php');			// needed in branch 9
+    @include_once('../typo3/sysext/core/Classes/Utility/PathUtility.php');		// needed in branch 9
+	@include_once('../typo3/sysext/core/Classes/Core/ApplicationContext.php');	// needed in branch 9
+	@include_once('../typo3/sysext/core/Classes/Log/LogLevel.php');				// used in many projects, so try to include always
+	
+	
     if (class_exists('\TYPO3\CMS\Core\Core\SystemEnvironmentBuilder'))   {
         class SystemEnvironmentBuilder extends \TYPO3\CMS\Core\Core\SystemEnvironmentBuilder	{
             // trick to call private methods
             public static function run_defineBaseConstants() {
                 self::defineBaseConstants();
             }
-	        public static function run_definePaths($relativePathPart = '') {
-		        self::definePaths($relativePathPart);
+	        public static function run_definePaths($relativePathPart) {
+            	if (TYPO3_MAJOR_BRANCH_VERSION >= 9)	{
+		        	self::definePaths($relativePathPart, self::REQUESTTYPE_BE);
+				}
+            	else	{
+		        	self::definePaths($relativePathPart);
+				}
 	        }
         }
-
+        
+        
         SystemEnvironmentBuilder::run_defineBaseConstants();
 
         if (!defined('TYPO3_MAJOR_BRANCH_VERSION')) {
@@ -128,8 +140,13 @@ if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION') 
         if (TYPO3_MAJOR_BRANCH_VERSION <= 7)  {
 	        SystemEnvironmentBuilder::run_definePaths('DUMP/');
         }
-        if (TYPO3_MAJOR_BRANCH_VERSION >= 8)   {
+        if (TYPO3_MAJOR_BRANCH_VERSION > 8)   {
             SystemEnvironmentBuilder::run_definePaths(1);
+        }
+        if (TYPO3_MAJOR_BRANCH_VERSION >= 9)   {
+        	// here we must run whole builder to set publicPath in Environment object - without that we don't have value in Environment::$publicPath
+			// which is possible used in config utilities in AdditionalConfiguration
+			SystemEnvironmentBuilder::run(1);
         }
     }
 }
@@ -803,18 +820,31 @@ class {$xclassName} extends \\{$originalClassFullName}	{
 	    foreach ((array) $systemActions as $systemAction)   {
 	        switch ($systemAction)  {
                 case 'enableInstallTool':
-		            $this->exec_control("touch {$this->PATH_site}typo3conf/ENABLE_INSTALL_TOOL");
+                	if (defined('TYPO3_OS') && TYPO3_OS === 'WIN')	{
+		            	$this->exec_control("\$null > {$this->PATH_site}typo3conf/ENABLE_INSTALL_TOOL");
+					}
+                	else	{
+		            	$this->exec_control("touch {$this->PATH_site}typo3conf/ENABLE_INSTALL_TOOL");
+					}
 		            break;
                 case 'clearCache':
                     $this->exec_control("{$this->PATH_site}typo3cms cache:flush");
                     break;
                 case 'clearTempDirectory':
-                    $this->exec_control("rm -R {$this->PATH_site}typo3temp/Cache");
-                    $this->exec_control("rm -R {$this->PATH_site}typo3temp/var/Cache");
+                    if (TYPO3_MAJOR_BRANCH_VERSION >= 8) {
+                        $this->exec_control("rm -R {$this->PATH_site}typo3temp/var/Cache/*");
+                    }
+                    else    {
+                        $this->exec_control("rm -R {$this->PATH_site}typo3temp/Cache/*");
+                    }
                     break;
                 case 'clearAutoload':
-                    $this->exec_control("rm -R {$this->PATH_site}typo3temp/autoload");
-                    $this->exec_control("rm -R {$this->PATH_site}typo3conf/autoload");
+                    if (TYPO3_MAJOR_BRANCH_VERSION >= 8) {
+                        $this->exec_control("rm -R {$this->PATH_site}typo3conf/autoload/*");
+                    }
+                    else    {
+                        $this->exec_control("rm -R {$this->PATH_site}typo3temp/autoload/*");
+                    }
                     break;
                 case 'regenerateAutoload':
                     $this->exec_control("{$this->PATH_site}typo3/cli_dispatch.phpsh extbase extension:dumpclassloadinginformation");
@@ -1552,8 +1582,8 @@ echo exec('/usr/bin/docker -v');*/
                                             //'valid' => !$Dump->checkFieldError('domainsFrom'),
                                             'class' => 'selector-domains',
                                             'content' => function() use ($Dump) {
-                                                $domainsFrom = count($_POST['domainsFrom'])  ?  $_POST['domainsFrom']  :  trim($Dump->options['updateDomains_defaultDomainSet'][ $Dump->options['updateDomains_defaultDomainSetFrom'] ]);
-                                                $domainsTo = count($_POST['domainsTo'])  ?  $_POST['domainsTo']  :  trim($Dump->options['updateDomains_defaultDomainSet'][ $Dump->options['updateDomains_defaultDomainSetTo'] ]);
+                                                $domainsFrom = (is_array($_POST['domainsFrom']) && count($_POST['domainsFrom']))  ?  $_POST['domainsFrom']  :  trim($Dump->options['updateDomains_defaultDomainSet'][ $Dump->options['updateDomains_defaultDomainSetFrom'] ]);
+                                                $domainsTo = (is_array($_POST['domainsTo']) && count($_POST['domainsTo']))  ?  $_POST['domainsTo']  :  trim($Dump->options['updateDomains_defaultDomainSet'][ $Dump->options['updateDomains_defaultDomainSetTo'] ]);
                                                 $countDomainFrom = count(explode("\n", $domainsFrom))  OR  5;
                                                 $countDomainTo = count(explode("\n", $domainsTo))  OR  5;
 
@@ -1719,20 +1749,20 @@ echo exec('/usr/bin/docker -v');*/
                                     ],
                                 ],
                                 [
-                                    'label' => 'TYPO3 system actions',
+                                    'label' => 'TYPO3 & system actions',
                                     'name' => 'typo3System',
                                     'options' => [
                                         [
-                                            'label' => "TYPO3 system actions",
+                                            'label' => "TYPO3 & system actions",
                                             'content' => function() use ($Dump) {
                                                 $code = "
                                                     <div class='form-row form-row-radio'>
                                                         <label>". $Dump->formField_check('typo3SystemAction[]', 'enableInstallTool')
                                                     . "<pre>> touch typo3conf/ENABLE_INSTALL_TOOL</pre></label>
                                                         <label>". $Dump->formField_check('typo3SystemAction[]', 'clearTempDirectory')
-                                                    . "<pre>> rm -R typo3temp/Cache  &&  rm -R typo3temp/var/Cache</pre></label>
+                                                    . "<pre>> rm -R typo3temp/Cache/*  &&  rm -R typo3temp/var/Cache/*</pre></label>
                                                         <label>". $Dump->formField_check('typo3SystemAction[]', 'clearAutoload')
-                                                    . "<pre>> rm -R typo3temp/autoload  &&  rm -R typo3conf/autoload</pre></label>
+                                                    . "<pre>> rm -R typo3temp/autoload/*  &&  rm -R typo3conf/autoload/*</pre></label>
                                                         <label>". $Dump->formField_check('typo3SystemAction[]', 'phpClearOpcache')
                                                     . "<pre>php: opcache_reset()</pre></label>
                                                         <label>". $Dump->formField_check('typo3SystemAction[]', 'regenerateAutoload')
