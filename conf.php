@@ -12,7 +12,7 @@ defined ('DUMP_VERSION') or die ('DUMP Config: Access denied.');
 
 /**
  * config compatible with:
- * 3.4.5
+ * 3.5.0
  */
 
 

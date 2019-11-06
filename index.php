@@ -30,7 +30,7 @@
 
 
 
-define ('DUMP_VERSION', '3.4.6');
+define ('DUMP_VERSION', '3.5.0');
 
 
 
@@ -364,6 +364,11 @@ class Dump  {
 			// XCLASS GENERATE
             case 'generateXclass':
                 $this->action_xClassGenerate($_POST['prefill']);
+                break;
+            
+            // TYPO3 SYSTEM ACTION
+            case 'typo3System':
+                $this->action_typo3System($_POST['typo3SystemAction']);
                 break;
 		}
 	}
@@ -791,33 +796,90 @@ class {$xclassName} extends \\{$originalClassFullName}	{
 	}
 
 
+	/**
+	 * TYPO3 SYSTEM ACTION
+	 */
+	private function action_typo3System($systemActions)   {
+	    foreach ((array) $systemActions as $systemAction)   {
+	        switch ($systemAction)  {
+                case 'enableInstallTool':
+		            $this->exec_control("touch {$this->PATH_site}typo3conf/ENABLE_INSTALL_TOOL");
+		            break;
+                case 'clearCache':
+                    $this->exec_control("{$this->PATH_site}typo3cms cache:flush");
+                    break;
+                case 'clearTempDirectory':
+                    $this->exec_control("rm -R {$this->PATH_site}typo3temp/Cache");
+                    $this->exec_control("rm -R {$this->PATH_site}typo3temp/var/Cache");
+                    break;
+                case 'clearAutoload':
+                    $this->exec_control("rm -R {$this->PATH_site}typo3temp/autoload");
+                    $this->exec_control("rm -R {$this->PATH_site}typo3conf/autoload");
+                    break;
+                case 'regenerateAutoload':
+                    $this->exec_control("{$this->PATH_site}typo3/cli_dispatch.phpsh extbase extension:dumpclassloadinginformation");
+                    break;
+                case 'phpClearOpcache':
+                    if (function_exists('opcache_reset')) {
+                        $result = opcache_reset();
+                        $this->msg('opcache_reset() called. result: ' . (string) $result, $result ? 'info' : 'warning'); 
+                    }
+                    else    {
+                        $this->msg('opcache functions not supported', 'error');
+                    }
+                    break;
+                
+            }
+        }
+        // test
+	    // $this->exec_control("ls -la {$this->PATH_site}");
+	}
+	
+	
+	
+
 	/* exec shell command */
 	private function exec_control($cmd, $saveCmd = true) {
-		if ($this->options['dontExecCommands'])
+	    $output = '';
+		if ($this->options['dontExecCommands']) {
 			$this->msg('command not executed - exec is disabled - @see option dontExecCommands', 'info');
-		elseif ($_POST['dontExec'])
+		}
+		elseif ($_POST['dontExec']) {
 			$this->msg('(command not executed)', 'info');
-		else
-			exec($cmd, $output, $return);
+        }
+		else    {
+		    if (ini_get('safe_mode')){
+			    exec($cmd, $outputArray, $return);
+			    $output = implode ("\n", $outputArray);
+            }
+		    else    {
+			    // $output = shell_exec($cmd);
+                // 2>&1 displays output even on error, which normally outputs null. comment if causes troubles
+                // note that it doesn't work properly when && is used to join multiple commands in one line call
+			    $output = shell_exec($cmd . ' 2>&1');
+            }
+        }
 
+// var_dump($return);
+// var_dump($output);
+// var_dump($outputArray);
 /*echo exec('whoami');
 echo exec('groups');
 echo exec('sudo -v');
 echo exec('/usr/bin/docker -v');*/
 
-/*$content = system('sudo  /usr/bin/docker images', $ret);
-var_dump ($content);
-print ' ---- ';
-print $ret;*/
 
-		// var_dump($output);
-		// var_dump($return);
 
-		if ($this->options['docker'])
+		/*if ($this->options['docker'])   {
 			$this->msg('running on docker - cmd probably didn\'t run. execute manually', 'info');
+        }*/
 
-		if ($saveCmd)
-			$this->cmds[] = htmlentities($cmd);
+		if ($saveCmd)   {
+			$this->cmds[] = ['command' => $cmd, 'output' => $output];
+		    
+        }
+		
+		return $output;
 	}
 
 
@@ -918,10 +980,13 @@ print $ret;*/
 		if ($this->cmds  &&  !$this->options['dontShowCommands'])   {
             $cmdLines = [];
 		    foreach ($this->cmds as $i => $cmd) {
-			    $cmdLines[] = "<span class=\"cmdLine\" id=\"commandLineGenerated{$i}\" onclick=\"selectText('commandLineGenerated{$i}');\">" . $cmd . "</span>";
+			    $cmdLines[] = "&gt; <span class=\"cmdLine\" id=\"commandLineGenerated{$i}\" onclick=\"selectText('commandLineGenerated{$i}');\">" . $cmd['command'] . "</span>";
+			    if ($cmd['output']) {
+			        $cmdLines[] = "<pre>".$cmd['output']."</pre>";
+                }
 		    }
 			$content .= "<p>- commands:</p>
-                         <p><pre>" . implode('<br><br>', $cmdLines)."</pre></p>";
+                         <p><pre>" . implode('<br><br>', $cmdLines) . "</pre></p>";
         }
 		return $content;
 	}
@@ -936,6 +1001,25 @@ print $ret;*/
     public function formField_radio($name, $value, $valueDefault = '', $class = '', $id = '', $additionalParams = [])   {
 	    $params = [
 	        'type' => 'radio',
+	        'name' => $name,
+	        'value' => $value,
+        ];
+	    if ($class)     $params['class'] = $class;
+	    if ($id)        $params['id'] = $id;
+	    $params = array_merge($params, $additionalParams);
+	    if ($_POST[$name] == $value  ||  (!$_POST[$name]  &&  $valueDefault == $value))
+	        $params['checked'] = '';
+	    $code = "<input ";
+	    foreach ($params as $param => $value) {
+	        $code .= $param . ($value ? '="'.$value.'"' : '');
+	    }
+	    $code .= ">";
+	    return $code;
+    }
+    
+    public function formField_check($name, $value, $valueDefault = '', $class = '', $id = '', $additionalParams = [])   {
+	    $params = [
+	        'type' => 'checkbox',
 	        'name' => $name,
 	        'value' => $value,
         ];
@@ -1178,18 +1262,22 @@ print $ret;*/
 	<title>DUMP - <?php print $_SERVER['HTTP_HOST']; ?></title>
 	<style type='text/css'>
         body    {font-family: Arial, Tahoma, sans-serif;}
+		ul  {list-style: none;  float: left;    margin-top: 0;  padding: 0;}
+        li  {margin: 4px 0;}
+        pre     {line-height: 1.2em; white-space: pre-wrap;}
 		label	{clear: both;   display: inline-block;}
-		.actions-selector > ul > li > label span	{float: left;   width: 260px;   cursor: pointer;}
+        label pre   {margin: 0;}
 		label input	{float: left;   cursor: pointer;}
-		.actions li + label  {float: left;}
-		.clear	{clear: both;}
+        a	{text-decoration: none;		color: #03d;}
+		a:hover	{text-decoration: underline;}
+
+        .to-left	{float: left;}
+		.hidden	 {display: none !important;}
+		.indent	 {margin-left: 40px;}
+        .clear	{clear: both;}
 		.error	{color: #d00;}
 		.info	{color: #282;   font-style: italic;     font-family: monospace;     font-size: 1.2em;   font-weight: 100;}
-		ul  {list-style: none;  float: left;    margin-top: 0;  padding: 0;}
-		.actions ul   {background: #eee;    padding: 20px;  box-shadow: 5px 5px 8px -2px #aaa;}
-		.actions li > label:hover   {color: darkorange;}
-		.actions li.active > label  {color: darkorange;}
-		.action-sub-options  {display: none;    padding: 10px 20px 20px;    background: gainsboro;  margin: 10px 0 20px 20px;  box-shadow: 5px 5px 8px -2px #aaa;}
+        
         select   {margin-right: 10px;}
 		input[type=radio]:checked + .action-sub-options  {display: block;}
 		input[type=checkbox]    {margin: 2px 6px 2px 0;}
@@ -1198,21 +1286,22 @@ print $ret;*/
         input[type=submit]:hover  { background: darkorange;}
         input[disabled], textarea[disabled] {cursor:not-allowed;}
         input[type=text], select, textarea  {border: 1px solid #a9a9a9;     box-shadow: inset 4px 4px 5px -2px #bbb;  padding: 6px;}
+        
+		.actions ul   {background: #eee;    padding: 20px;  box-shadow: 5px 5px 8px -2px #aaa;}
+		.actions li > label:hover   {color: darkorange;}
+		.actions li.active > label  {color: darkorange;}
+		.actions-selector > ul > li > label > span	{float: left;   width: 260px;   cursor: pointer;}
+		.action-sub-options  {display: none;    padding: 10px 20px 20px;    background: gainsboro;  margin: 10px 0 20px 20px;  box-shadow: 5px 5px 8px -2px #aaa;}
 		.action-sub-options label   {display: block;        padding: 2px 0 4px;}
 		.form-row {display: block;  margin-bottom: 12px;}
         .form-row-checkbox label, .form-row-radio label {cursor: pointer;}
 		.selector-tables textarea   {overflow-wrap: normal;}
 		.predefined-sets span.link-set:not(:first-child):before	{content: '\00A0 | \00A0';}
-		footer	 {font-size: 80%;  margin-top: 70px;}
-		pre		 {line-height: 1.2em; white-space: pre-wrap;}
+		
+        footer	 {font-size: 80%;  margin-top: 70px;}
 		.config p	{margin: 8px 0;}
-		.to-left	{float: left;}
-		.hidden	 {display: none !important;}
-		.indent	 {margin-left: 40px;}
 		.tooltip	{background: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiI+CjxwYXRoIGQ9Im0xMjggMjIuMTU4YTEwNS44NCAxMDUuODQgMCAwIDAgLTEwNS44NCAxMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAxMDUuODQgMTA1Ljg0IDEwNS44NCAxMDUuODQgMCAwIDAgMTA1Ljg0IC0xMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAtMTA1Ljg0IC0xMDUuODR6bTAgMzIuNzZjNS4xNiAwLjExNyA5LjU1IDEuODc1IDEzLjE4IDUuMjczIDMuMzQgMy41NzUgNS4wNyA3Ljk0IDUuMTkgMTMuMDk2LTAuMTIgNS4xNTYtMS44NSA5LjQwNC01LjE5IDEyLjc0NC0zLjYzIDMuNzUtOC4wMiA1LjYyNS0xMy4xOCA1LjYyNXMtOS40LTEuODc1LTEyLjc0LTUuNjI1Yy0zLjc1LTMuMzQtNS42My03LjU4OC01LjYzLTEyLjc0NHMxLjg4LTkuNTIxIDUuNjMtMTMuMDk2YzMuMzQtMy4zOTggNy41OC01LjE1NiAxMi43NC01LjI3M3ptLTE2LjM1IDUzLjc5MmgzMi43OXY5Mi4zN2gtMzIuNzl2LTkyLjM3eiIgZmlsbC1ydWxlPSJldmVub2RkIiBmaWxsPSIjNzJhN2NmIi8+Cjwvc3ZnPgo=');
             background-size: 16px 16px;     background-position: left center;   background-repeat: no-repeat;   min-height: 16px;   display: inline-block;  padding-left: 16px; cursor: help;   margin-left: 4px;}
-		a	{text-decoration: none;		color: #03d;}
-		a:hover	{text-decoration: underline;}
 
         @media screen and (min-width: 900px) {
             .actions    {position: relative;}
@@ -1455,7 +1544,7 @@ print $ret;*/
                                     ],
                                 ],
                                 [
-                                    'label' => 'Domains update',
+                                    'label' => 'DOMAINS update',
                                     'name' => 'domainsUpdate',
                                     'options' => [
                                         [
@@ -1624,6 +1713,33 @@ print $ret;*/
                                                     	{$additionalInfo}
 													</div>
                                                     ";
+                                                return $code;
+                                            }
+                                        ],
+                                    ],
+                                ],
+                                [
+                                    'label' => 'TYPO3 system actions',
+                                    'name' => 'typo3System',
+                                    'options' => [
+                                        [
+                                            'label' => "TYPO3 system actions",
+                                            'content' => function() use ($Dump) {
+                                                $code = "
+                                                    <div class='form-row form-row-radio'>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'enableInstallTool')
+                                                    . "<pre>> touch typo3conf/ENABLE_INSTALL_TOOL</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'clearTempDirectory')
+                                                    . "<pre>> rm -R typo3temp/Cache  &&  rm -R typo3temp/var/Cache</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'clearAutoload')
+                                                    . "<pre>> rm -R typo3temp/autoload  &&  rm -R typo3conf/autoload</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'phpClearOpcache')
+                                                    . "<pre>php: opcache_reset()</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'regenerateAutoload')
+                                                    . "<pre>typo3 cli: regenerate autoload</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'clearCache')
+                                                    . "<pre>typo3 cli: clear cache (ext:typo3_console)</pre></label>
+                                                    </div>";
                                                 return $code;
                                             }
                                         ],
