@@ -30,7 +30,7 @@
 
 
 
-define ('DUMP_VERSION', '3.6.0');
+define ('DUMP_VERSION', '3.6.1');
 
 
 
@@ -485,7 +485,7 @@ class Dump  {
 
 
 		// display download link
-		$this->cmds[] = "<br><a href=\"{$dumpFilename}-v{$this->projectVersion}.sql.tgz\">{$dumpFilename}-v{$this->projectVersion}.sql.tgz</a><br>";
+		$this->cmds[] = ['command' => "<br><a href=\"{$dumpFilename}-v{$this->projectVersion}.sql.tgz\">{$dumpFilename}-v{$this->projectVersion}.sql.tgz</a><br>"];
 	}
 
 
@@ -534,7 +534,7 @@ class Dump  {
 		/* $this->exec_control ('tar -zcf '.{$this->PATH_site}.'DUMP/'.$dumpFilename.'-v'.$this->projectVersion.'.tgz ./../* --exclude="typo3temp" --exclude="DUMP" --exclude="uploads" -exclude="typo3_src-*"  '); */
 
 		// display download link
-		$this->cmds[] = "<br><a href=\"{$dumpFilename}-v{$this->projectVersion}.tgz\">{$dumpFilename}-v{$this->projectVersion}.tgz</a><br>";
+		$this->cmds[] = ['command' => "<br><a href=\"{$dumpFilename}-v{$this->projectVersion}.tgz\">{$dumpFilename}-v{$this->projectVersion}.tgz</a><br>"];
 	}
 
 
@@ -906,7 +906,6 @@ echo exec('/usr/bin/docker -v');*/
 
 		if ($saveCmd)   {
 			$this->cmds[] = ['command' => $cmd, 'output' => $output];
-		    
         }
 		
 		return $output;
@@ -933,7 +932,7 @@ echo exec('/usr/bin/docker -v');*/
             else                                $this->msg('Mysqli multi_query called successfully. Affected rows: ' . $affected, 'info');
 
             $dbConnection->close();
-	        $this->cmds[] = htmlentities($query);
+	        $this->cmds[] = ['command' => htmlentities($query)];
         }
     }
 
