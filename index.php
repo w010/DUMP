@@ -30,7 +30,7 @@
 
 
 
-define ('DUMP_VERSION', '3.6.1');
+define ('DUMP_VERSION', '3.6.2');
 
 
 
@@ -291,7 +291,7 @@ class Dump  {
 
 	function main() {
 
-		if (!$this->dbConf['username'] || !$this->dbConf['password'] || !$this->dbConf['host'] || !$this->dbConf['database'])
+		if (!$this->dbConf['username'] || !$this->dbConf['host'] || !$this->dbConf['database'])
 			$this->msg('CHECK DATABASE CONFIG. Looks like authorization data is missed. See your '.(TYPO3_MAJOR_BRANCH_VERSION === 4 ? 'localconf' : 'LocalConfiguration'), 'error');
 
 		$this->addEnvironmentMessage();
