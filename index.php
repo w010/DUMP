@@ -30,7 +30,7 @@
 
 
 
-define ('DUMP_VERSION', '3.6.2');
+define ('DUMP_VERSION', '3.6.3');
 
 
 
@@ -271,6 +271,13 @@ class Dump  {
 	const DATABASE_QUERY_METHOD__MYSQLI = 'mysqli';
 	const DATABASE_QUERY_METHOD__CLI = 'cli';
 
+	// database connection
+	public $dbConnection = null; 
+
+	// system components versions
+	public $databaseVersion = '';
+	public $phpVersion = '';
+
 
 	function __construct() {
 		global $options;
@@ -287,6 +294,9 @@ class Dump  {
 			$this->dockerContainerCmd['sql'] = "docker exec -i {$this->options['docker_containerSql']}   ";
 			$this->dockerContainerCmd['php'] = "docker exec -i {$this->options['docker_containerPhp']}   ";
 		}
+		
+		$this->databaseConnect();
+		$this->phpVersion = phpversion();
 	}
 
 	function main() {
@@ -310,17 +320,15 @@ class Dump  {
 		}
 
 		// add some header system & conf informations
-		$this->configInfoHeader .= '<p>- database: <span class="info"><b>' . $this->dbConf['database'] . '</b></span> / connection test status: '.$this->testDatabaseConnectivity().'</p>';
+		$this->configInfoHeader .= '<p>- database: <span class="info"><b>' . $this->dbConf['database'] . '</b></span> / Db server: <span class="info">' . $this->databaseVersion . '</span> / connection test status: '.$this->databaseTest().'</p>';
 		if ($this->options['docker'])   {
 			$this->configInfoHeader .= '<p>- docker sql: <span class="info">' . $this->options['docker_containerSql'] . '</span></p>';
 			$this->configInfoHeader .= '<p>- docker php: <span class="info">' . $this->options['docker_containerPhp'] . '</span></p>';
 		}
 		$this->configInfoHeader .= '<p>- branch detected: <span class="info"><b>' . TYPO3_MAJOR_BRANCH_VERSION
             . (defined('TYPO3_version') ? '</b></span> / version: <b><span class="info">' . TYPO3_version . '</span></b>' : '') . '</b></span></p>';
-
-		$this->configInfoHeader .= '<p>- PHP: <span class="info"><b>' . phpversion() . '</b></span></p>';
-
-
+		
+		$this->configInfoHeader .= '<p>- PHP: <span class="info"><b>' . $this->phpVersion . '</b></span>';
 
 		// check if action is given if submitted
 		if (!$_POST['submit']  ||  ($_POST['submit'] && !$this->paramsRequiredPass(['action' => $this->action])))
@@ -1130,13 +1138,20 @@ echo exec('/usr/bin/docker -v');*/
         return 'CONTAINER NAME NOT DETECTED!';
     }
 
-    /* try database connection */
-    function testDatabaseConnectivity() {
-        $msg = '<span class="error">unknown</span>';
+    /* database connection */
+    function databaseConnect() {
         if ($this->dbConf['host'])  {
-	        $dbConnection = new mysqli($this->dbConf['host'], $this->dbConf['username'], $this->dbConf['password'], $this->dbConf['database']);
-	        if ($dbConnection->connect_error)
-		        $msg = '<span class="error">error<br>'.$dbConnection->connect_error.'</span>';
+	        $this->dbConnection = new mysqli($this->dbConf['host'], $this->dbConf['username'], $this->dbConf['password'], $this->dbConf['database']);
+	        $this->databaseVersion = $this->dbConnection->get_server_info();
+        }
+    }
+
+    /* try database */
+    function databaseTest() {
+        $msg = '<span class="error">unknown</span>';
+        if (is_object($this->dbConnection))	{
+	        if ($this->dbConnection->connect_error)
+		        $msg = '<span class="error">error<br>'.$this->dbConnection->connect_error.'</span>';
 	        else
 		        $msg = '<span class="info">OK</span>';
         }
@@ -1328,7 +1343,7 @@ echo exec('/usr/bin/docker -v');*/
 		.predefined-sets span.link-set:not(:first-child):before	{content: '\00A0 | \00A0';}
 		
         footer	 {font-size: 80%;  margin-top: 70px;}
-		.config p	{margin: 8px 0;}
+		.config p	{margin: 8px 0;	line-height: 1.4em;}
 		.tooltip	{background: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiI+CjxwYXRoIGQ9Im0xMjggMjIuMTU4YTEwNS44NCAxMDUuODQgMCAwIDAgLTEwNS44NCAxMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAxMDUuODQgMTA1Ljg0IDEwNS44NCAxMDUuODQgMCAwIDAgMTA1Ljg0IC0xMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAtMTA1Ljg0IC0xMDUuODR6bTAgMzIuNzZjNS4xNiAwLjExNyA5LjU1IDEuODc1IDEzLjE4IDUuMjczIDMuMzQgMy41NzUgNS4wNyA3Ljk0IDUuMTkgMTMuMDk2LTAuMTIgNS4xNTYtMS44NSA5LjQwNC01LjE5IDEyLjc0NC0zLjYzIDMuNzUtOC4wMiA1LjYyNS0xMy4xOCA1LjYyNXMtOS40LTEuODc1LTEyLjc0LTUuNjI1Yy0zLjc1LTMuMzQtNS42My03LjU4OC01LjYzLTEyLjc0NHMxLjg4LTkuNTIxIDUuNjMtMTMuMDk2YzMuMzQtMy4zOTggNy41OC01LjE1NiAxMi43NC01LjI3M3ptLTE2LjM1IDUzLjc5MmgzMi43OXY5Mi4zN2gtMzIuNzl2LTkyLjM3eiIgZmlsbC1ydWxlPSJldmVub2RkIiBmaWxsPSIjNzJhN2NmIi8+Cjwvc3ZnPgo=');
             background-size: 16px 16px;     background-position: left center;   background-repeat: no-repeat;   min-height: 16px;   display: inline-block;  padding-left: 16px; cursor: help;   margin-left: 4px;}
 
