@@ -30,7 +30,7 @@
 
 
 
-define ('DUMP_VERSION', '3.6.3');
+define ('DUMP_VERSION', '3.6.4');
 
 
 
@@ -856,6 +856,9 @@ class {$xclassName} extends \\{$originalClassFullName}	{
                     break;
                 case 'regenerateAutoload':
                     $this->exec_control("{$this->PATH_site}typo3/cli_dispatch.phpsh extbase extension:dumpclassloadinginformation");
+                    break;
+				case 'phpPhpInfo':
+					phpinfo();
                     break;
                 case 'phpClearOpcache':
                     if (function_exists('opcache_reset')) {
@@ -1777,6 +1780,8 @@ echo exec('/usr/bin/docker -v');*/
                                                     . "<pre>> rm -R typo3temp/Cache/*  &&  rm -R typo3temp/var/Cache/*</pre></label>
                                                         <label>". $Dump->formField_check('typo3SystemAction[]', 'clearAutoload')
                                                     . "<pre>> rm -R typo3temp/autoload/*  &&  rm -R typo3conf/autoload/*</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'phpPhpInfo')
+                                                    . "<pre>php: php_info()</pre></label>
                                                         <label>". $Dump->formField_check('typo3SystemAction[]', 'phpClearOpcache')
                                                     . "<pre>php: opcache_reset()</pre></label>
                                                         <label>". $Dump->formField_check('typo3SystemAction[]', 'regenerateAutoload')
