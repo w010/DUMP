@@ -5,9 +5,11 @@
 
 /**
  *  WTP DUMP/BACKUP TOOL FOR TYPO3 - wolo.pl '.' studio
- *  2013-2019
+ *  2013-2020
  *
- *  Supported TYPO3 versions: 4, 6, 7, 8, 9
+ *  Supported TYPO3 versions: 4, 6, 7, 8, 9, 10
+ *
+ *  (Note, that recently I don't test it in older TYPO3, so if it doesn't work try older DUMP version)
  */
 
 // ! you should change default password !
@@ -29,8 +31,9 @@
  */
 
 
+use TYPO3\CMS\Core\Core\ApplicationContext;
 
-define ('DUMP_VERSION', '3.6.4');
+define ('DUMP_VERSION', '3.7.0');
 
 
 
@@ -102,8 +105,9 @@ if (file_exists('../typo3conf/localconf.php')  &&  !file_exists('../typo3conf/Lo
 }
 
 // try to use native path and version detection, but without running many other initial things
-if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION')  ||  ( defined('TYPO3_MAJOR_BRANCH_VERSION')  &&  TYPO3_MAJOR_BRANCH_VERSION > 4 ) ) )  {
+if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION')  ||  ( defined('TYPO3_MAJOR_BRANCH_VERSION')  &&  TYPO3_MAJOR_BRANCH_VERSION > 4  &&  TYPO3_MAJOR_BRANCH_VERSION != 10  ) ) )  {
 
+    // TODO check if we can remove these includes when using autoload
     @include_once('../typo3/sysext/core/Classes/Core/SystemEnvironmentBuilder.php');
     @include_once('../typo3/sysext/core/Classes/Utility/GeneralUtility.php');
 	@include_once('../typo3/sysext/core/Classes/Core/Environment.php');			// needed in branch 9
@@ -111,17 +115,40 @@ if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION') 
 	@include_once('../typo3/sysext/core/Classes/Core/ApplicationContext.php');	// needed in branch 9
 	@include_once('../typo3/sysext/core/Classes/Log/LogLevel.php');				// used in many projects, so try to include always
 	
+    $classLoader = require dirname(__DIR__).'/vendor/autoload.php';
 	
     if (class_exists('\TYPO3\CMS\Core\Core\SystemEnvironmentBuilder'))   {
         class SystemEnvironmentBuilder extends \TYPO3\CMS\Core\Core\SystemEnvironmentBuilder	{
             // trick to call private methods
             public static function run_defineBaseConstants() {
                 self::defineBaseConstants();
+                
+                // in 9 is defined at this moment, but in 10 there's no such const anymore
+                if (!defined('TYPO3_MAJOR_BRANCH_VERSION'))   {
+                    if (class_exists('TYPO3\\CMS\\Core\\Information\\Typo3Version')) {
+                        new \TYPO3\CMS\Core\Information\Typo3Version();
+                        
+                        if (defined('TYPO3_branch')) {
+                            preg_match('#(.+?)\.#', TYPO3_version, $matches);
+                            define('TYPO3_MAJOR_BRANCH_VERSION', intval($matches[1]));
+                        }
+                        if (TYPO3_MAJOR_BRANCH_VERSION === 10)   {
+                            $classLoader = require dirname(__DIR__).'/vendor/autoload.php';
+                            \TYPO3\CMS\Core\Core\SystemEnvironmentBuilder::run(1, \TYPO3\CMS\Core\Core\SystemEnvironmentBuilder::REQUESTTYPE_BE);
+                            \TYPO3\CMS\Core\Core\Bootstrap::init($classLoader)->get(\TYPO3\CMS\Backend\Http\Application::class);
+                        }
+                    }
+                }
             }
 	        public static function run_definePaths($relativePathPart) {
-            	if (TYPO3_MAJOR_BRANCH_VERSION >= 9)	{
+            	if (TYPO3_MAJOR_BRANCH_VERSION === 9)	{
 		        	self::definePaths($relativePathPart, self::REQUESTTYPE_BE);
 				}
+            	// = 10
+            	if (TYPO3_MAJOR_BRANCH_VERSION === 10)	{
+            	    // don't do anything
+                }
+            	// <= 9
             	else	{
 		        	self::definePaths($relativePathPart);
 				}
@@ -129,7 +156,7 @@ if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION') 
         }
         
         
-        SystemEnvironmentBuilder::run_defineBaseConstants();
+        \SystemEnvironmentBuilder::run_defineBaseConstants();
 
         if (!defined('TYPO3_MAJOR_BRANCH_VERSION')) {
 	    	preg_match('#(.+?)\.#', TYPO3_version, $matches);
@@ -143,7 +170,7 @@ if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION') 
         if (TYPO3_MAJOR_BRANCH_VERSION > 8)   {
             SystemEnvironmentBuilder::run_definePaths(1);
         }
-        if (TYPO3_MAJOR_BRANCH_VERSION >= 9)   {
+        if (TYPO3_MAJOR_BRANCH_VERSION === 9)   {
         	// here we must run whole builder to set publicPath in Environment object - without that we don't have value in Environment::$publicPath
 			// which is possible used in config utilities in AdditionalConfiguration
 			SystemEnvironmentBuilder::run(1);
@@ -196,16 +223,31 @@ switch (TYPO3_MAJOR_BRANCH_VERSION)    {
         // in general Dump class database config structure/naming is basing on this one from 6 and 7 branches - so it expects keys: username, password, host, database
 	    $databaseConfiguration = $GLOBALS['TYPO3_CONF_VARS']['DB'];
         break;
-
+        
     case 8:
     case 9:
-    default:
 	    if (file_exists(PATH_site.'typo3conf/LocalConfiguration.php'))	{
 		    $GLOBALS['TYPO3_CONF_VARS'] = include_once(PATH_site.'typo3conf/LocalConfiguration.php');
 		    // may be used sometimes in AdditionalConfiguration
 		    @include_once(PATH_site.'typo3/sysext/core/Classes/Utility/ExtensionManagementUtility.php');
 		    @include_once(PATH_site.'typo3conf/AdditionalConfiguration.php');
 	    }
+	    $databaseConfiguration['username'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'];
+	    $databaseConfiguration['password'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'];
+	    $databaseConfiguration['host'] =     $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'];
+	    $databaseConfiguration['database'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'];
+	    break;
+
+    case 10:
+        // dontUseTYPO3Init in 10.x just won't work in projects that uses classes calls in AdditionalConfiguration, first problem is \Environment::getPublicPath() which is empty and no way to set the value from here
+        // in such case you have to use your manual db config in conf.php and forget about including typo3 config
+        /*if ($options['dontUseTYPO3Init']  &&  file_exists(PATH_site.'typo3conf/LocalConfiguration.php'))	{
+		    $GLOBALS['TYPO3_CONF_VARS'] = include_once(PATH_site.'typo3conf/LocalConfiguration.php');
+		    @include_once(PATH_site.'typo3/sysext/core/Classes/Core/Environment.php');
+		    @include_once(PATH_site.'typo3conf/AdditionalConfiguration.php');
+	    }*/
+        // when using full init, we don't need to do anything, the whole conf is already included and available here
+    default:
 	    $databaseConfiguration['username'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'];
 	    $databaseConfiguration['password'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'];
 	    $databaseConfiguration['host'] =     $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'];
@@ -314,7 +356,7 @@ class Dump  {
 
 		// predicted project name, taken from domain name or conf (only when not submitted, on first run)
 		if (!$_POST['submit']  &&  !$_POST['projectName']) {
-			list($this->projectName) = preg_split('@\.@', $_SERVER['HTTP_HOST']);
+			[$this->projectName] = preg_split('@\.@', $_SERVER['HTTP_HOST']);
 			if ($this->options['defaultProjectName'])
 				$this->projectName = $this->options['defaultProjectName'];
 		}
@@ -463,7 +505,7 @@ class Dump  {
 				. $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
 				. " --no-data \\"
 				. chr(10) . implode(' ', $omitTables)
-				. "  >>  \"{$this->PATH_dump}{$this->projectName}-v{$this->projectVersion}.sql\" ";
+				. "  >>  \"{$this->PATH_dump}{$this->projectName}-v{$this->projectVersion}.sql\"  2>/dev/null";
 		} 
 
 		// dziala na dockerze (wywolany recznie)
@@ -472,9 +514,10 @@ class Dump  {
 		//$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --skip-set-charset --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
 		// in case of encoding problems / if no SET NAMES in dump: use --set-charset
 		//$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --set-charset --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
+		// docker exec kickstartert310ff_dev_php_1 bash -c 'mysql -hmysql -uroot -pdbmaster --default-character-set=utf8 project_app < $(dump)'
 		$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
 			. $ignoredTablesPart
-			. "  >  \"{$this->PATH_dump}{$this->projectName}-v{$this->projectVersion}.sql\" "
+			. "  >  \"{$this->PATH_dump}{$this->projectName}-v{$this->projectVersion}.sql\"  2>/dev/null" 
 			. $dumpOnlyStructureQuery;
 
 		$this->exec_control($cmd);
@@ -522,7 +565,7 @@ class Dump  {
 				$cmd .= ' .  --exclude="DUMP" --exclude-vcs --exclude="deprecation*.log"';
 
 			foreach($excluded as $exclude)  {
-                list ($excludeInDir) = explode('/', $exclude);
+                [$excludeInDir] = explode('/', $exclude);
                 if (in_array($excludeInDir, $included))
                     $cmd .= ' --exclude="'.$exclude.'"';
 				/*$cmd .= ' --exclude="';
@@ -1195,7 +1238,7 @@ echo exec('/usr/bin/docker -v');*/
 			    return $namespace;
 
 			// try to find in PSR4
-			list($originalClassFullPath_extDir, $originalClassFullPath_classFilePath) = explode('Classes/', $originalClassFullPath);
+			[$originalClassFullPath_extDir, $originalClassFullPath_classFilePath] = explode('Classes/', $originalClassFullPath);
 			// the keys point to the Classes dir, not files itself, so try to find this path (is in array!)
             $psr4NamespaceExt = array_search([$originalClassFullPath_extDir . 'Classes'], $autoloadPSR4);
             // build rest of namespace

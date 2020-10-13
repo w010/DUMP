@@ -1,7 +1,7 @@
 <?php
 /**
  * DUMP - WTP DUMP/BACKUP TOOL FOR TYPO3 - wolo.pl '.' studio
- * 2013-2019
+ * 2013-2020
  *
  * Remember that this conf is included twice (before init and after to make the constant conditions work)
  * so if you need to define any constants always check if they are defined already
@@ -12,14 +12,14 @@ defined ('DUMP_VERSION') or die ('DUMP Config: Access denied.');
 
 /**
  * config compatible with:
- * 3.6.0
+ * 3.7.0
  */
 
 
 /*
  * in case of problems with native base typo3 init, define branch version here and disable init using dontUseTYPO3Init => true
  */
-//defined('T3_MAJOR_BRANCH_VERSION') or define('T3_MAJOR_BRANCH_VERSION', 7);
+//defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 7);
 
 /*
  * in some projects there's need to include some missing classes which are used in AdditionalConfiguration
@@ -38,7 +38,7 @@ $optionsCustom = [
 
 
 	// determines paths using own classic method, use if you don't have working typo3 instance in parent dir
-	// (then must set T3_MAJOR_BRANCH_VERSION and/or hardcode database credentials here)
+	// (then must set TYPO3_MAJOR_BRANCH_VERSION and/or hardcode database credentials here)
 	//'dontUseTYPO3Init' => true,
 
 
@@ -98,10 +98,10 @@ $optionsCustom = [
 	Here you can hardcode database credentials, if not using typo3 local configuration.
 	Remember to define T3_MAJOR_BRANCH_VERSION, otherwise conf structure will be interpreted as this from 8/9 branch
 	
-	defined('T3_MAJOR_BRANCH_VERSION') or define('T3_MAJOR_BRANCH_VERSION', 7);
+	defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 7);
 	$GLOBALS['TYPO3_CONF_VARS']['DB']['password'] = ...
 		or
-	defined('T3_MAJOR_BRANCH_VERSION') or define('T3_MAJOR_BRANCH_VERSION', 9);
+	defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 9);
 	$GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'] = ...
 */
 

@@ -5,8 +5,9 @@ https://www.youtube.com/watch?v=14-fEwga82E
 
 
 WTP DUMP/BACKUP TOOL FOR TYPO3 - wolo.pl '.' studio  
-2013-2019  
-Supported TYPO3 versions: 4, 6, 7, 8, 9  
+2013-2020
+Supported TYPO3 versions: 4, 6, 7, 8, 9, 10
+(Note, that recently I don't test it in older TYPO3, so if it doesn't work try older DUMP version)
 
 ! you should change default password !
 
