@@ -28,12 +28,15 @@
  * conf: omit tables, include directories - make them work also as linebreak-separated lists instead of array
  * password in mysqldump and other params should be in single quotes (makes problems ie. when ! is in password and double quotes are used)
  * "Archive filesystem" fix linked checkbox "Ignore selection" with dir selectors deactivity (now are disabled but checkbox is unchecked)
+ * in action typo3 & system actions: make the checkboxes buttons to instantly call them, also expand the action panel after reload
+ * also mark actions somehow depending of compat with current version or existence of typo3_console etc.
+ * BUG: something wrong with caught output of domains update action/query
  */
 
 
 use TYPO3\CMS\Core\Core\ApplicationContext;
 
-define ('DUMP_VERSION', '3.7.0');
+define ('DUMP_VERSION', '3.7.1');
 
 
 
@@ -1393,6 +1396,7 @@ echo exec('/usr/bin/docker -v');*/
 		.tooltip	{background: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiI+CjxwYXRoIGQ9Im0xMjggMjIuMTU4YTEwNS44NCAxMDUuODQgMCAwIDAgLTEwNS44NCAxMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAxMDUuODQgMTA1Ljg0IDEwNS44NCAxMDUuODQgMCAwIDAgMTA1Ljg0IC0xMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAtMTA1Ljg0IC0xMDUuODR6bTAgMzIuNzZjNS4xNiAwLjExNyA5LjU1IDEuODc1IDEzLjE4IDUuMjczIDMuMzQgMy41NzUgNS4wNyA3Ljk0IDUuMTkgMTMuMDk2LTAuMTIgNS4xNTYtMS44NSA5LjQwNC01LjE5IDEyLjc0NC0zLjYzIDMuNzUtOC4wMiA1LjYyNS0xMy4xOCA1LjYyNXMtOS40LTEuODc1LTEyLjc0LTUuNjI1Yy0zLjc1LTMuMzQtNS42My03LjU4OC01LjYzLTEyLjc0NHMxLjg4LTkuNTIxIDUuNjMtMTMuMDk2YzMuMzQtMy4zOTggNy41OC01LjE1NiAxMi43NC01LjI3M3ptLTE2LjM1IDUzLjc5MmgzMi43OXY5Mi4zN2gtMzIuNzl2LTkyLjM3eiIgZmlsbC1ydWxlPSJldmVub2RkIiBmaWxsPSIjNzJhN2NmIi8+Cjwvc3ZnPgo=');
             background-size: 16px 16px;     background-position: left center;   background-repeat: no-repeat;   min-height: 16px;   display: inline-block;  padding-left: 16px; cursor: help;   margin-left: 4px;}
 
+		header .version	{font-size: 12px; color: #999; margin-left: 10px;}
         @media screen and (min-width: 900px) {
             .actions    {position: relative;}
             .action-sub-options {min-width: calc((50% / 3) * 2);     top: 0;     left: 390px;    margin: 0 0 20px;  position: absolute;}
@@ -1446,7 +1450,7 @@ echo exec('/usr/bin/docker -v');*/
 <body>
 
 	<header>
-		<h2>WTP '.' TYPO3 Dump tool</h2>
+		<h2>WTP '.' TYPO3 Dump tool <span class="version"><?php	print DUMP_VERSION;	?></span> </h2>
 	</header>
 
 
@@ -1472,6 +1476,35 @@ echo exec('/usr/bin/docker -v');*/
                     <ul>
                         <?php
                             $actions = [
+								[
+                                    'label' => 'TYPO3 & system actions',
+                                    'name' => 'typo3System',
+                                    'options' => [
+                                        [
+                                            'label' => "TYPO3 & system actions",
+                                            'content' => function() use ($Dump) {
+                                                $code = "
+                                                    <div class='form-row form-row-radio'>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'enableInstallTool')
+                                                    . "<pre>> touch typo3conf/ENABLE_INSTALL_TOOL</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'clearTempDirectory')
+                                                    . "<pre>> rm -R typo3temp/Cache/*  &&  rm -R typo3temp/var/Cache/*</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'clearAutoload')
+                                                    . "<pre>> rm -R typo3temp/autoload/*  &&  rm -R typo3conf/autoload/*</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'phpPhpInfo')
+                                                    . "<pre>php: php_info()</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'phpClearOpcache')
+                                                    . "<pre>php: opcache_reset()</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'regenerateAutoload')
+                                                    . "<pre>typo3 cli: regenerate autoload</pre></label>
+                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'clearCache')
+                                                    . "<pre>typo3 cli: clear cache (ext:typo3_console)</pre></label>
+                                                    </div>";
+                                                return $code;
+                                            }
+                                        ],
+                                    ],
+                                ],
                                 [
                                     'label' => 'Database - IMPORT &DoubleLeftArrow;',
                                     'name' => 'databaseImport',
@@ -1808,35 +1841,6 @@ echo exec('/usr/bin/docker -v');*/
                                         ],
                                     ],
                                 ],
-                                [
-                                    'label' => 'TYPO3 & system actions',
-                                    'name' => 'typo3System',
-                                    'options' => [
-                                        [
-                                            'label' => "TYPO3 & system actions",
-                                            'content' => function() use ($Dump) {
-                                                $code = "
-                                                    <div class='form-row form-row-radio'>
-                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'enableInstallTool')
-                                                    . "<pre>> touch typo3conf/ENABLE_INSTALL_TOOL</pre></label>
-                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'clearTempDirectory')
-                                                    . "<pre>> rm -R typo3temp/Cache/*  &&  rm -R typo3temp/var/Cache/*</pre></label>
-                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'clearAutoload')
-                                                    . "<pre>> rm -R typo3temp/autoload/*  &&  rm -R typo3conf/autoload/*</pre></label>
-                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'phpPhpInfo')
-                                                    . "<pre>php: php_info()</pre></label>
-                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'phpClearOpcache')
-                                                    . "<pre>php: opcache_reset()</pre></label>
-                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'regenerateAutoload')
-                                                    . "<pre>typo3 cli: regenerate autoload</pre></label>
-                                                        <label>". $Dump->formField_check('typo3SystemAction[]', 'clearCache')
-                                                    . "<pre>typo3 cli: clear cache (ext:typo3_console)</pre></label>
-                                                    </div>";
-                                                return $code;
-                                            }
-                                        ],
-                                    ],
-                                ],
                             ];
 
 
@@ -1857,6 +1861,8 @@ echo exec('/usr/bin/docker -v');*/
                                             ###OPTIONS_CONTENT###
                                         </div>
                                         ";
+                            
+                            $actionSelectorActive = $_POST['action'] ?? 'typo3System';
 
                             $codeActions = '';
                             foreach ($actions as $action)   {
@@ -1883,8 +1889,8 @@ echo exec('/usr/bin/docker -v');*/
                                         '###ACTION_LABEL###' => $action['label'],
                                         '###OPTIONS###' => $codeOptions,
                                         '###ACTION_OPTIONS_CLASS###' => $codeOptions ? '' : ' hidden',
-                                        '###ACTION_CLASS###' => $_POST['action'] === $action['name'] ? 'active' : '',
-                                        '###ACTION_CHECKED###' => $_POST['action'] === $action['name'] ? ' checked' : '',
+                                        '###ACTION_CLASS###' => $actionSelectorActive === $action['name'] ? 'active' : '',
+                                        '###ACTION_CHECKED###' => $actionSelectorActive === $action['name'] ? ' checked' : '',
                                     ]
                                 );
                             }
@@ -1926,7 +1932,7 @@ echo exec('/usr/bin/docker -v');*/
 	<footer>
 		<i>DUMP (Damn Usable Management Program)<br>
             Database and filesystem migration tool for TYPO3<br>
-            WTP - wolo.pl '.' studio 2013-2019<br>
+            WTP - wolo.pl '.' studio 2013-2020<br>
             v<?php print DUMP_VERSION; ?>
         </i>
 	</footer>

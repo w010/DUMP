@@ -12,16 +12,23 @@ Require user dump
 
 
 # Access block for files - restore, allow to download all from this dir
-#<FilesMatch ^>
+#<FilesMatch ^>	# all
+<FilesMatch "\.(sql|tgz|gz)$">
+
+	Require user dump
+
 #	# Apache < 2.3
 #	<IfModule !mod_authz_core.c>
 #		Order allow,deny
 #		allow from all
 #		Satisfy All
+#		# Require user dump
 #	</IfModule>
-
+#
 #	# Apache ≥ 2.3
 #	<IfModule mod_authz_core.c>
 #		Require all granted
+#		# Require user dump
 #	</IfModule>
-#</FilesMatch>
+</FilesMatch>
+
