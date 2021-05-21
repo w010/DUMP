@@ -24,7 +24,9 @@ defined ('DUMP_VERSION') or die ('DUMP Config: Access denied.');
 /*
  * in some projects there's need to include some missing classes which are used in AdditionalConfiguration
  */
+//require_once('../vendor/psr/log/Psr/Log/LogLevel.php');
 //require_once('../typo3/sysext/core/Classes/Log/LogLevel.php');
+//require_once('../typo3/sysext/core/Classes/Utility/GeneralUtility.php');
 
 
 
@@ -96,7 +98,7 @@ $optionsCustom = [
 
 /*
 	Here you can hardcode database credentials, if not using typo3 local configuration.
-	Remember to define T3_MAJOR_BRANCH_VERSION, otherwise conf structure will be interpreted as this from 8/9 branch
+	Remember to define TYPO3_MAJOR_BRANCH_VERSION, otherwise conf structure will be interpreted as this from 8/9 branch
 	
 	defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 7);
 	$GLOBALS['TYPO3_CONF_VARS']['DB']['password'] = ...

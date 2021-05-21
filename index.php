@@ -5,7 +5,7 @@
 
 /**
  *  WTP DUMP/BACKUP TOOL FOR TYPO3 - wolo.pl '.' studio
- *  2013-2020
+ *  2013-2021
  *
  *  Supported TYPO3 versions: 4, 6, 7, 8, 9, 10
  *
@@ -36,7 +36,7 @@
 
 use TYPO3\CMS\Core\Core\ApplicationContext;
 
-define ('DUMP_VERSION', '3.7.1');
+define ('DUMP_VERSION', '3.7.2');
 
 
 
@@ -118,7 +118,15 @@ if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION') 
 	@include_once('../typo3/sysext/core/Classes/Core/ApplicationContext.php');	// needed in branch 9
 	@include_once('../typo3/sysext/core/Classes/Log/LogLevel.php');				// used in many projects, so try to include always
 	
-    $classLoader = require dirname(__DIR__).'/vendor/autoload.php';
+	if (file_exists(dirname(__DIR__).'/vendor/autoload.php'))	{
+    	$classLoader = require dirname(__DIR__).'/vendor/autoload.php';
+	}
+	else if (file_exists(dirname(__DIR__).'/typo3_src/vendor/autoload.php'))	{
+		$classLoader = require dirname(__DIR__).'/typo3_src/vendor/autoload.php';
+	}
+	else	{
+		die ('Cannot include class loader - /vendor/autoload.php not found');
+	}
 	
     if (class_exists('\TYPO3\CMS\Core\Core\SystemEnvironmentBuilder'))   {
         class SystemEnvironmentBuilder extends \TYPO3\CMS\Core\Core\SystemEnvironmentBuilder	{
@@ -144,11 +152,12 @@ if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION') 
                 }
             }
 	        public static function run_definePaths($relativePathPart) {
-            	if (TYPO3_MAJOR_BRANCH_VERSION === 9)	{
+				// note that in some versions (9?) TYPO3_MAJOR_BRANCH_VERSION may be a string!
+            	if (intval(TYPO3_MAJOR_BRANCH_VERSION) === 9)	{
 		        	self::definePaths($relativePathPart, self::REQUESTTYPE_BE);
 				}
             	// = 10
-            	if (TYPO3_MAJOR_BRANCH_VERSION === 10)	{
+            	else if (intval(TYPO3_MAJOR_BRANCH_VERSION) === 10)	{
             	    // don't do anything
                 }
             	// <= 9
@@ -173,7 +182,7 @@ if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION') 
         if (TYPO3_MAJOR_BRANCH_VERSION > 8)   {
             SystemEnvironmentBuilder::run_definePaths(1);
         }
-        if (TYPO3_MAJOR_BRANCH_VERSION === 9)   {
+        if (intval(TYPO3_MAJOR_BRANCH_VERSION) === 9)   {
         	// here we must run whole builder to set publicPath in Environment object - without that we don't have value in Environment::$publicPath
 			// which is possible used in config utilities in AdditionalConfiguration
 			SystemEnvironmentBuilder::run(1);
@@ -203,6 +212,7 @@ if (!defined('TYPO3_MAJOR_BRANCH_VERSION'))
 
 
 
+// note that in some versions (9?) TYPO3_MAJOR_BRANCH_VERSION may be a string!
 switch (TYPO3_MAJOR_BRANCH_VERSION)    {
 
     case 4:
@@ -365,7 +375,7 @@ class Dump  {
 		}
 
 		// add some header system & conf informations
-		$this->configInfoHeader .= '<p>- database: <span class="info"><b>' . $this->dbConf['database'] . '</b></span> / Db server: <span class="info">' . $this->databaseVersion . '</span> / connection test status: '.$this->databaseTest().'</p>';
+		$this->configInfoHeader .= '<p>- database: <span class="info"><b>' . $this->dbConf['database'] . '</b></span> / Db server: <span class="info">' . $this->databaseVersion . '</span> / connection test status: '.$this->databaseTest() . '<i class="tooltip" title="For credentials used go to \'Database - exec QUERY\'" onclick="document.getElementById(\'action_databaseQuery\').click();"></i></p>';
 		if ($this->options['docker'])   {
 			$this->configInfoHeader .= '<p>- docker sql: <span class="info">' . $this->options['docker_containerSql'] . '</span></p>';
 			$this->configInfoHeader .= '<p>- docker php: <span class="info">' . $this->options['docker_containerPhp'] . '</span></p>';
@@ -1766,6 +1776,14 @@ echo exec('/usr/bin/docker -v');*/
                                             //'valid' => !$Dump->checkFieldError('databaseQuery'),
                                             'content' => function() use ($Dump) {
                                                 return "<div{$Dump->checkFieldError_printClass('databaseQuery', 'form-row')}>
+                                                        <p><i>Credentials:</i><br>
+                                                        	<pre>" .
+                                                        	"user: {$Dump->dbConf['username']}\n" .
+                                                        	"pass: {$Dump->dbConf['password']}\n" .
+                                                        	"dbas: {$Dump->dbConf['database']}\n" .
+                                                        	"host: {$Dump->dbConf['host']}\n" .
+                                                        	"</pre>
+                                                        </p>
                                                         <label>Query to exec:</label>
                                                         <textarea name='databaseQuery' cols='64' rows='16'>" . htmlspecialchars($_POST['databaseQuery']) . "</textarea>
                                                     </div>
@@ -1932,7 +1950,7 @@ echo exec('/usr/bin/docker -v');*/
 	<footer>
 		<i>DUMP (Damn Usable Management Program)<br>
             Database and filesystem migration tool for TYPO3<br>
-            WTP - wolo.pl '.' studio 2013-2020<br>
+            WTP - wolo.pl '.' studio 2013-2021<br>
             v<?php print DUMP_VERSION; ?>
         </i>
 	</footer>
