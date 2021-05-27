@@ -1,0 +1,34 @@
+
+# ACCESS
+
+AuthType Basic
+AuthName "wtp dump: admin only"
+#AuthUserFile /srv/www/vhosts/kunden.xxx/htdocs/bbb/DUMP/.htpasswd
+#AuthUserFile /kunden/aaa/bbb/DUMP/.htpasswd
+#AuthUserFile "/var/www/htdocs/DUMP/.htpasswd"
+AuthUserFile "D:\WORK\___projects\WTP3\DUMP\.htpasswd"
+#Require valid-user
+Require user dump
+
+
+# Access block for files - restore, allow to download all from this dir
+#<FilesMatch ^>	# all
+<FilesMatch "\.(sql|tgz|gz)$">
+
+	Require user dump
+
+#	# Apache < 2.3
+#	<IfModule !mod_authz_core.c>
+#		Order allow,deny
+#		allow from all
+#		Satisfy All
+#		# Require user dump
+#	</IfModule>
+#
+#	# Apache ≥ 2.3
+#	<IfModule mod_authz_core.c>
+#		Require all granted
+#		# Require user dump
+#	</IfModule>
+</FilesMatch>
+
