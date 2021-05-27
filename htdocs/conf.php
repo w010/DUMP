@@ -1,7 +1,7 @@
 <?php
 /**
  * DUMP - WTP DUMP/BACKUP TOOL FOR TYPO3 - wolo.pl '.' studio
- * 2013-2020
+ * 2013-2021
  *
  * Remember that this conf is included twice (before init and after to make the constant conditions work)
  * so if you need to define any constants always check if they are defined already
@@ -12,14 +12,14 @@ defined ('DUMP_VERSION') or die ('DUMP Config: Access denied.');
 
 /**
  * config compatible with:
- * 3.7.0
+ * 3.8.0
  */
 
 
 /*
  * in case of problems with native base typo3 init, define branch version here and disable init using dontUseTYPO3Init => true
  */
-//defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 7);
+//defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 9);
 
 /*
  * in some projects there's need to include some missing classes which are used in AdditionalConfiguration

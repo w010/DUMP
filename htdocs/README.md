@@ -1,3 +1,19 @@
+TODO
+to probowac na problem z komunikatem o hasle!
+
+tail -n +2 build-stage-v01.sql >  build-stage-v01fixed.sql
+strip first error line in dump
+
+
+
+TODO:
+- add option to fetch & run Adminer
+- add option to autodestroy - delete dump dir contents (if no sql/zip/etc found there?) or only force on htaccess. better the option to delete completely)
+
+
+
+
+
 # DUMP
 ## Damn Usable Management Program for TYPO3
 

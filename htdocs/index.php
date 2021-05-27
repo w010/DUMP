@@ -36,7 +36,7 @@
 
 use TYPO3\CMS\Core\Core\ApplicationContext;
 
-define ('DUMP_VERSION', '3.7.2');
+define ('DUMP_VERSION', '3.8.0');
 
 
 
@@ -194,9 +194,9 @@ if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION') 
 if (!defined('PATH_site'))	{
 	define('PATH_thisScript', str_replace('//', '/', str_replace('\\', '/',
 		(PHP_SAPI == 'fpm-fcgi' || PHP_SAPI == 'cgi' || PHP_SAPI == 'isapi' || PHP_SAPI == 'cgi-fcgi') &&
-		($_SERVER['ORIG_PATH_TRANSLATED'] ? $_SERVER['ORIG_PATH_TRANSLATED'] : $_SERVER['PATH_TRANSLATED']) ?
-		($_SERVER['ORIG_PATH_TRANSLATED'] ? $_SERVER['ORIG_PATH_TRANSLATED'] : $_SERVER['PATH_TRANSLATED']) :
-		($_SERVER['ORIG_SCRIPT_FILENAME'] ? $_SERVER['ORIG_SCRIPT_FILENAME'] : $_SERVER['SCRIPT_FILENAME']))));
+		($_SERVER['ORIG_PATH_TRANSLATED'] || $_SERVER['PATH_TRANSLATED']) ?
+		($_SERVER['ORIG_PATH_TRANSLATED'] ?: $_SERVER['PATH_TRANSLATED']) :
+		($_SERVER['ORIG_SCRIPT_FILENAME'] ?: $_SERVER['SCRIPT_FILENAME']))));
 	define('PATH_site', realpath(dirname(PATH_thisScript).'/../').'/');
 }
 
@@ -288,6 +288,12 @@ $options = array_replace($options, $optionsCustom);
 
 
 
+// output Adminer, if included from adminer.php
+if ($GLOBALS['dump_adminer_load'])	{
+	require_once (PATH_dump . '/lib/adminer-loader.php');
+	exit;
+}
+
 
 
 
@@ -375,7 +381,10 @@ class Dump  {
 		}
 
 		// add some header system & conf informations
-		$this->configInfoHeader .= '<p>- database: <span class="info"><b>' . $this->dbConf['database'] . '</b></span> / Db server: <span class="info">' . $this->databaseVersion . '</span> / connection test status: '.$this->databaseTest() . '<i class="tooltip" title="For credentials used go to \'Database - exec QUERY\'" onclick="document.getElementById(\'action_databaseQuery\').click();"></i></p>';
+		$this->configInfoHeader .= '<p>- database: <span class="info"><b>' . $this->dbConf['database'] . '</b></span> / Db server: <span class="info">' . $this->databaseVersion . '</span> / connection test status: '.$this->databaseTest() 
+			. '<i class="tooltip" title="For credentials used go to \'Database - exec QUERY\'" onclick="document.getElementById(\'action_databaseQuery\').click();"></i>'
+			. (file_exists(PATH_dump.'adminer.php') ? ' / <a href="adminer.php">ADMINER</a>' : '')
+			.'</p>';
 		if ($this->options['docker'])   {
 			$this->configInfoHeader .= '<p>- docker sql: <span class="info">' . $this->options['docker_containerSql'] . '</span></p>';
 			$this->configInfoHeader .= '<p>- docker php: <span class="info">' . $this->options['docker_containerPhp'] . '</span></p>';
