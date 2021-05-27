@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DependencyValidationManager">
+    <scope name="t3_local-SCOPE" pattern="file:htdocs/typo3conf/ext/t3_local/" />
+    <scope name="q3i_base-SCOPE" pattern="file:htdocs/typo3conf/ext/q3i_base/" />
+    <scope name="templates-SCOPE" pattern="file:htdocs/typo3conf/templates/" />
+    <scope name="fluidfoundationtheme-SCOPE" pattern="file:htdocs/typo3conf/ext/fluidfoundationtheme/" />
+  </component>
+</project>
