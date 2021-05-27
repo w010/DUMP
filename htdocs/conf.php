@@ -11,15 +11,11 @@ defined ('DUMP_VERSION') or die ('DUMP Config: Access denied.');
 
 
 /**
- * config compatible with:
+ * config compatible with DUMP version:
  * 3.8.0
  */
 
 
-/*
- * in case of problems with native base typo3 init, define branch version here and disable init using dontUseTYPO3Init => true
- */
-//defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 9);
 
 /*
  * in some projects there's need to include some missing classes which are used in AdditionalConfiguration
@@ -94,6 +90,16 @@ $optionsCustom = [
 
 ];
 
+
+
+/*
+ * in case of problems with native base typo3 init, define branch version here and disable init using dontUseTYPO3Init => true
+ */
+
+/*
+$optionsCustom['dontUseTYPO3Init'] = true;
+defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 9);
+*/
 
 
 /*
