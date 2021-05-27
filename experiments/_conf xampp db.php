@@ -11,11 +11,15 @@ defined ('DUMP_VERSION') or die ('DUMP Config: Access denied.');
 
 
 /**
- * config compatible with DUMP version:
+ * config compatible with:
  * 3.8.0
  */
 
 
+/*
+ * in case of problems with native base typo3 init, define branch version here and disable init using dontUseTYPO3Init => true
+ */
+defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 9);
 
 /*
  * in some projects there's need to include some missing classes which are used in AdditionalConfiguration
@@ -37,7 +41,7 @@ $optionsCustom = [
 
 	// determines paths using own classic method, use if you don't have working typo3 instance in parent dir
 	// (then must set TYPO3_MAJOR_BRANCH_VERSION and/or hardcode database credentials here)
-	//'dontUseTYPO3Init' => true,
+	'dontUseTYPO3Init' => true,
 
 
 	// script only displays generated command line, but doesn't execute it (overwrites checkbox selection)
@@ -93,16 +97,6 @@ $optionsCustom = [
 
 
 /*
- * in case of problems with native base typo3 init, define branch version here and disable init using dontUseTYPO3Init => true
- */
-
-/*
-$optionsCustom['dontUseTYPO3Init'] = true;
-defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 9);
-*/
-
-
-/*
 	Here you can hardcode database credentials, if not using typo3 local configuration.
 	Remember to define TYPO3_MAJOR_BRANCH_VERSION, otherwise conf structure will be interpreted as this from 8/9 branch
 	
@@ -114,3 +108,17 @@ defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 9)
 */
 
 
+/*$GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'] = 'www_devel';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'] = 'www_devel';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'] = 'project_app';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'] = 'mysql';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['port'] = '3306';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['driver'] = 'mysqli';*/
+    
+    
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'] = 'typo3';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'] = 'typo3';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'] = 'typo3_v11';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'] = 'localhost';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['port'] = '3306';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['driver'] = 'mysqli';
