@@ -36,7 +36,7 @@
 
 
 
-const DUMP_VERSION = '3.8.90';
+const DUMP_VERSION = '3.8.91';
 
 
 
@@ -57,17 +57,15 @@ ini_set('display_errors', 'On'); // shows all errors
 
 
 
-// init some var used here around. todo later: get rid of it, if possible
-$databaseConfiguration = [];
 
 
 
 
-// custom options may be included to override, if conf exists
-$options = Dump::readConf();
+// custom options may be included, if conf exists (is merged with default and stored in Dump::options)
+Dump::readAndSetConf();
 // get the config
-Dump::getConf();
-
+// (in its initial form - because some values may depend on some constants defined below - so the config will be included again after)  
+$options = Dump::getConf();
 
 
 // this simple filename check is pretty sure v.4 detection test
@@ -191,13 +189,10 @@ if (!defined('TYPO3_MAJOR_BRANCH_VERSION'))
  * Init system/Typo configuration
  * Encapsulated from the global scope
  * 	// [for now, encapsulation is only tested here]
- * @param $options
- * @param $optionsCustom
  */
-$_InitConfig_encaps = function(&$options, &$optionsCustom) {
+$_InitConfig_encaps = function() {
 
-	global $typo_db_username, $typo_db_password, $typo_db_host, $typo_db,
-		$databaseConfiguration;
+	global $typo_db_username, $typo_db_password, $typo_db_host, $typo_db;
 
 
 
@@ -208,10 +203,10 @@ $_InitConfig_encaps = function(&$options, &$optionsCustom) {
 			if (file_exists(PATH_site.'typo3conf/localconf.php')) {
 				include_once(PATH_site . 'typo3conf/localconf.php');
 			}
-			$databaseConfiguration['username'] = $typo_db_username;
-			$databaseConfiguration['password'] = $typo_db_password;
-			$databaseConfiguration['host'] =     $typo_db_host;
-			$databaseConfiguration['database'] = $typo_db;
+			Dump::setDbConfVar('username', 		$typo_db_username);
+			Dump::setDbConfVar('password',		$typo_db_password);
+			Dump::setDbConfVar('host',			$typo_db_host);
+			Dump::setDbConfVar('database',		$typo_db);
 			break;
 
 		case 6:
@@ -223,7 +218,10 @@ $_InitConfig_encaps = function(&$options, &$optionsCustom) {
 				@include_once(PATH_site.'typo3conf/AdditionalConfiguration.php');
 			}
 			// in general Dump class database config structure/naming is basing on this one from 6 and 7 branches - so it expects keys: username, password, host, database
-			$databaseConfiguration = $GLOBALS['TYPO3_CONF_VARS']['DB'];
+			Dump::setDbConfVar('username', 		$GLOBALS['TYPO3_CONF_VARS']['DB']['username']);
+			Dump::setDbConfVar('password',		$GLOBALS['TYPO3_CONF_VARS']['DB']['password']);
+			Dump::setDbConfVar('host',			$GLOBALS['TYPO3_CONF_VARS']['DB']['host']);
+			Dump::setDbConfVar('database',		$GLOBALS['TYPO3_CONF_VARS']['DB']['database']);
 			break;
 
 		case 8:
@@ -234,10 +232,10 @@ $_InitConfig_encaps = function(&$options, &$optionsCustom) {
 				@include_once(PATH_site.'typo3/sysext/core/Classes/Utility/ExtensionManagementUtility.php');
 				@include_once(PATH_site.'typo3conf/AdditionalConfiguration.php');
 			}
-			$databaseConfiguration['username'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'];
-			$databaseConfiguration['password'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'];
-			$databaseConfiguration['host'] =     $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'];
-			$databaseConfiguration['database'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'];
+			Dump::setDbConfVar('username', 		$GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user']);
+			Dump::setDbConfVar('password',		$GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password']);
+			Dump::setDbConfVar('host',			$GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host']);
+			Dump::setDbConfVar('database',		$GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname']);
 			break;
 
 		case 10:
@@ -251,15 +249,12 @@ $_InitConfig_encaps = function(&$options, &$optionsCustom) {
 
 			// when using full init, we don't need to do anything, the whole conf is already included and available here
 		default:
-			$databaseConfiguration['username'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'];
-			$databaseConfiguration['password'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'];
-			$databaseConfiguration['host'] =     $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'];
-			$databaseConfiguration['database'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'];
+			Dump::setDbConfVar('username', 		$GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user']);
+			Dump::setDbConfVar('password',		$GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password']);
+			Dump::setDbConfVar('host',			$GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host']);
+			Dump::setDbConfVar('database',		$GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname']);
 			break;
 	}
-
-
-
 
 
 
@@ -273,13 +268,12 @@ $_InitConfig_encaps = function(&$options, &$optionsCustom) {
 
 
 	// reinclude config (overwrite settings which uses conditions on some constants defined above)
-	include ('conf.php');
-	$options = array_replace($options, $optionsCustom);
+	Dump::readAndSetConf();
 
 
 	// as for now, this encapsulation is only tested here 
 };
-$_InitConfig_encaps($options, $optionsCustom);
+$_InitConfig_encaps();
 unset($_InitConfig_encaps);
 
 
@@ -293,7 +287,7 @@ if ($GLOBALS['dump_adminer_load'])	{
 
 
 
-$Dump = new Dump(/*$options, $databaseConfiguration*/);
+$Dump = new Dump();
 $Dump->main();
 
 
@@ -359,7 +353,7 @@ class Dump  {
 
 	// working configuration
 	protected static $options = [];
-	public $dbConf = [];
+	protected static $dbConf = [];
 
 	// html content to display before form
 	public $configInfoHeader = '';
@@ -400,9 +394,6 @@ class Dump  {
 
 
 	/*protected */function __construct() {
-		//$this->options = $options;
-		//$this->dbConf = $databaseConfiguration;
-
 		$this->PATH_site = PATH_site;
 		$this->PATH_dump = PATH_dump;
 
@@ -412,32 +403,39 @@ class Dump  {
 			$this->dockerContainerCmd['sql'] = "docker exec -i {$this->option('docker_containerSql')}   ";
 			$this->dockerContainerCmd['php'] = "docker exec -i {$this->option('docker_containerPhp')}   ";
 		}
-		
+
 		$this->databaseConnect();
 		$this->phpVersion = phpversion();
 	}
 
-	public static function configure($options = []) {
-		// if this.options are empty: merge incoming onto defaults, assign result to options
-		// otherwise: merge incoming onto current config 
+    /**
+	 * Expecting vars: username, password, host, database
+     */
+	public static function setDbConfVar($var, $value) {
+		static::$dbConf[$var] = $value;
 	}
 
-	public static function readConf() {
-		//$options = [];
+    /**
+	 * Return database config, or its single var
+     * @param string $var
+     * @return array|string
+     */
+	public function getDbConf($var = '') {
+		return $var ? static::$dbConf[$var] : static::$dbConf;
+	}
+
+
+	public static function readAndSetConf() {
 		$optionsCustom = [];
 		try {
 			include Dump::CONFIG_FILENAME;
 			//var_export($optionsCustom); die('stop');
-			
-			
-			$options = array_replace(Dump::$optionsDefault, $optionsCustom);
-			
-			// todo: make sure the var has the value as expected, after inluding file here, not in global scope
-			
-		} catch (Exception $e){
-			var_export($e); die('stop');
+			static::$options = array_replace(Dump::$optionsDefault, $optionsCustom);
+		} catch (\Throwable $e){
+			// todo later: nice display of this message, instead of ugly direct print
+			print "<pre>"; print_r($e); print "</pre>";
 		}
-		return $options;
+		return static::$options;
 	}
 
     /**
@@ -467,7 +465,7 @@ class Dump  {
 
 	function main() {
 
-		if (!$this->dbConf['username'] || !$this->dbConf['host'] || !$this->dbConf['database'])
+		if (!$this->getDbConf('username') || !$this->getDbConf('host') || !$this->getDbConf('database'))
 			$this->msg('CHECK DATABASE CONFIG. Looks like authorization data is missed. See your '.(TYPO3_MAJOR_BRANCH_VERSION === 4 ? 'localconf' : 'LocalConfiguration'), 'error');
 
 		$this->addEnvironmentMessage();
@@ -486,18 +484,20 @@ class Dump  {
 		}
 
 		// add some header system & conf informations
-		$this->configInfoHeader .= '<p>- database: <span class="info"><b>' . $this->dbConf['database'] . '</b></span> / Db server: <span class="info">' . $this->databaseVersion . '</span> / connection test status: '.$this->databaseTest() 
-			. '<i class="tooltip" title="For credentials used go to \'Database - exec QUERY\'" onclick="document.getElementById(\'action_databaseQuery\').click();"></i>'
+		$this->configInfoHeader .= '<p>database: <span class="info"><b>' . $this->getDbConf('database') . '</b></span> / db server: <span class="info">' . $this->databaseVersion . '</span> / connection test  - status: '.$this->databaseTest() 
+			. '<i class="tooltip clickable" title="For credentials used go to \'Database - exec QUERY\'" onclick="document.getElementById(\'action_databaseQuery\').click();"></i>'
 			. (file_exists(PATH_dump.'adminer.php') ? ' / <a href="adminer.php">ADMINER</a>' : '')
 			.'</p>';
 		if ($this->option('docker'))   {
-			$this->configInfoHeader .= '<p>- docker sql: <span class="info">' . $this->option('docker_containerSql') . '</span></p>';
-			$this->configInfoHeader .= '<p>- docker php: <span class="info">' . $this->option('docker_containerPhp') . '</span></p>';
+			$this->configInfoHeader .= '<p>docker sql: <span class="info">' . $this->option('docker_containerSql') . '</span></p>';
+			$this->configInfoHeader .= '<p>docker php: <span class="info">' . $this->option('docker_containerPhp') . '</span></p>';
 		}
-		$this->configInfoHeader .= '<p>- branch detected: <span class="info"><b>' . TYPO3_MAJOR_BRANCH_VERSION
+		$this->configInfoHeader .= '<p>TYPO3 major detected: <span class="info"><b>' . TYPO3_MAJOR_BRANCH_VERSION
             . (defined('TYPO3_version') ? '</b></span> / version: <b><span class="info">' . TYPO3_version . '</span></b>' : '') . '</b></span></p>';
 		
-		$this->configInfoHeader .= '<p>- PHP: <span class="info"><b>' . $this->phpVersion . '</b></span>';
+		$this->configInfoHeader .= '<p>PHP: <span class="info"><b>' . $this->phpVersion . '</b></span>';
+
+		// TODO: move this to results! (div.results) it doesn't belong here
 
 		// check if action is given if submitted
 		if (!$_POST['submit']  ||  ($_POST['submit'] && !$this->paramsRequiredPass(['action' => $this->action])))
@@ -592,7 +592,7 @@ class Dump  {
         else    {
 	        $mysqlCommand = " < {$this->PATH_dump}{$dbFilename}";
         }
-		$this->exec_control($this->dockerContainerCmd['php'] . "mysql --batch --quick --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\" --database={$this->dbConf['database']}  {$mysqlCommand}");
+		$this->exec_control($this->dockerContainerCmd['php'] . "mysql --batch --quick --host={$this->getDbConf('host')} --user={$this->getDbConf('username')} --password=\"{$this->getDbConf('password')}\" --database={$this->getDbConf('database')}  {$mysqlCommand}");
 	}
 
 
@@ -613,7 +613,7 @@ class Dump  {
 		// todo: czy PATH_dump jest potrzebny, czy dziala pod linuxem, pod win, w dockerze
 		// todo: for docker try  /var/www/htdocs/_docker/dump_local_db.sh
 		// old full dump
-		//$this->exec_control($this->dockerCmdPart['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --skip-set-charset --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  >  \"{$this->PATH_dump}{$this->projectName}-v{$this->projectVersion}.sql\"; ");
+		//$this->exec_control($this->dockerCmdPart['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --skip-set-charset --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->getDbConf('host')} --user={$this->getDbConf('username')} --password=\"{$this->getDbConf('password')}\"  {$this->getDbConf('database')}  >  \"{$this->PATH_dump}{$this->projectName}-v{$this->projectVersion}.sql\"; ");
 
 
 		// example - ignored without data but structure:
@@ -623,13 +623,13 @@ class Dump  {
 		$dumpOnlyStructureQuery = '';
 
 		if ($_POST['omitTablesIncludeInQuery']  &&  $omitTables  &&  !$allTables) {
-			$ignoredTablesPart = ' \\' . chr(10) . "--ignore-table={$this->dbConf['database']}."
-				. implode (' \\' . chr(10) . "--ignore-table={$this->dbConf['database']}.", $omitTables);
+			$ignoredTablesPart = ' \\' . chr(10) . "--ignore-table={$this->getDbConf('database')}."
+				. implode (' \\' . chr(10) . "--ignore-table={$this->getDbConf('database')}.", $omitTables);
 
 			$dumpOnlyStructureQuery = ';'     // end previous command only if needed
 				. chr(10) . chr(10)
-				//. $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --skip-set-charset --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
-				. $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
+				//. $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --skip-set-charset --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->getDbConf('host')} --user={$this->getDbConf('username')} --password=\"{$this->getDbConf('password')}\"  {$this->getDbConf('database')}  "
+				. $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->getDbConf('host')} --user={$this->getDbConf('username')} --password=\"{$this->getDbConf('password')}\"  {$this->getDbConf('database')}  "
 				. " --no-data \\"
 				. chr(10) . implode(' ', $omitTables)
 				. "  >>  \"{$this->PATH_dump}{$this->projectName}-v{$this->projectVersion}.sql\"  2>/dev/null";
@@ -638,11 +638,11 @@ class Dump  {
 		// dziala na dockerze (wywolany recznie)
         // dziala na linux
 		// na win teoretycznie powinno tez ze stream output
-		//$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --skip-set-charset --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
+		//$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --skip-set-charset --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->getDbConf('host')} --user={$this->getDbConf('username')} --password=\"{$this->getDbConf('password')}\"  {$this->getDbConf('database')}  "
 		// in case of encoding problems / if no SET NAMES in dump: use --set-charset
-		//$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --set-charset --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
+		//$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --set-charset --host={$this->getDbConf('host')} --user={$this->getDbConf('username')} --password=\"{$this->getDbConf('password')}\"  {$this->getDbConf('database')}  "
 		// docker exec kickstartert310ff_dev_php_1 bash -c 'mysql -hmysql -uroot -pdbmaster --default-character-set=utf8 project_app < $(dump)'
-		$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\"  {$this->dbConf['database']}  "
+		$cmd = $this->dockerContainerCmd['sql'] . "mysqldump --complete-insert --add-drop-table --no-create-db --quick --lock-tables --add-locks --default-character-set=utf8 --host={$this->getDbConf('host')} --user={$this->getDbConf('username')} --password=\"{$this->getDbConf('password')}\"  {$this->getDbConf('database')}  "
 			. $ignoredTablesPart
 			. "  >  \"{$this->PATH_dump}{$this->projectName}-v{$this->projectVersion}.sql\"  2>/dev/null" 
 			. $dumpOnlyStructureQuery;
@@ -817,7 +817,7 @@ class Dump  {
                 //$query = escapeshellarg($_POST['databaseQuery']);
                 // manually escape double quotes (escapeshellarg doesn't do it as expected in this case) and remove linebreaks
                 $query = str_replace([/*"'",*/ '"', "\n", "\r"], [/*"\'",*/ '\"', ' ', ' '], $_POST['databaseQuery']);
-                $this->exec_control($this->dockerContainerCmd['php'] . "mysql --batch --quick --host={$this->dbConf['host']} --user={$this->dbConf['username']} --password=\"{$this->dbConf['password']}\" --database={$this->dbConf['database']}  --execute=\"{$query}\"");
+                $this->exec_control($this->dockerContainerCmd['php'] . "mysql --batch --quick --host={$this->getDbConf('host')} --user={$this->getDbConf('username')} --password=\"{$this->getDbConf('password')}\" --database={$this->getDbConf('database')}  --execute=\"{$query}\"");
                 break;
 
             default:
@@ -1100,7 +1100,7 @@ echo exec('/usr/bin/docker -v');*/
         elseif ($_POST['dontExec'])
 			$this->msg('(query not executed)', 'info');
         else    {
-            $dbConnection = new mysqli($this->dbConf['host'], $this->dbConf['username'], $this->dbConf['password'], $this->dbConf['database']);
+            $dbConnection = new mysqli($this->getDbConf('host'), $this->getDbConf('username'), $this->getDbConf('password'), $this->getDbConf('database'));
             $affected = 0;
             if ($dbConnection->multi_query($query)) {
                 do  {
@@ -1338,8 +1338,8 @@ echo exec('/usr/bin/docker -v');*/
 
     /* database connection */
     function databaseConnect() {
-        if ($this->dbConf['host'])  {
-	        $this->dbConnection = new mysqli($this->dbConf['host'], $this->dbConf['username'], $this->dbConf['password'], $this->dbConf['database']);
+        if ($this->getDbConf('host'))  {
+	        $this->dbConnection = new mysqli($this->getDbConf('host'), $this->getDbConf('username'), $this->getDbConf('password'), $this->getDbConf('database'));
 	        $this->databaseVersion = $this->dbConnection->get_server_info();
         }
     }
@@ -1502,9 +1502,9 @@ echo exec('/usr/bin/docker -v');*/
 <head>
 	<title>DUMP - <?php print $_SERVER['HTTP_HOST']; ?></title>
 	<style>
-		*, ::after, ::before { box-sizing: border-box;	}
-		:root	{   --w--bg: #fefefe; --w--primary: #111;	--w--link: #03d;  --w--info: #282; --w--error: #d00;  --w--marked: darkorange; --w--gray1: #a9a9a9; --w--gray2: #aaa;  --w--gray3: #bbb;  --w--gray4: #eee;  --w--gray5: gainsboro;  --w--gray6: #999;}
-        body    {font-family: Arial, Tahoma, sans-serif; margin-top: 0; padding-top: 170px; background-color: var(--w--bg); color: var(--w--primary); }
+		*, ::after, ::before {box-sizing: border-box;}
+		:root	{--w--bg: #fefefe; --w--primary: #111;	--w--link: #03d;  --w--info: #282; --w--error: #d00;  --w--marked: darkorange; --w--gray1: #a9a9a9; --w--gray2: #aaa;  --w--gray3: #bbb;  --w--gray4: #eee;  --w--gray5: gainsboro;  --w--gray6: #999;}
+        body    {font-family: Arial, Tahoma, sans-serif; margin-top: 0; padding-top: 170px; background-color: var(--w--bg); color: var(--w--primary);}
 		ul  {list-style: none;  float: left;    margin-top: 0;  padding: 0;}
         li  {margin: 4px 0;}
         pre     {line-height: 1.2em; white-space: pre-wrap;}
@@ -1519,8 +1519,11 @@ echo exec('/usr/bin/docker -v');*/
 		.indent	 {margin-left: 40px;}
         .clear	{clear: both;}
 		.error	{color: var(--w--error);}
+		.important	{color: var(--w--error);}
 		.info	{color: var(--w--info);   font-style: italic;     font-family: monospace;     font-size: 1.2em;   font-weight: 100;}
-        
+
+		.config-env p	{padding-left: 16px;}
+
         select   {margin-right: 10px;}
 		input[type=radio]:checked + .action-sub-options  {display: block;}
 		input[type=checkbox]    {margin: 2px 6px 2px 0;}
@@ -1529,7 +1532,7 @@ echo exec('/usr/bin/docker -v');*/
         input[type=submit]:hover  { background: ;}
         input[disabled], textarea[disabled] {cursor:not-allowed;}
         input[type=text], select, textarea  {border: 1px solid var(--w--gray1);     box-shadow: inset 4px 4px 5px -2px var(--w--gray3);  padding: 6px;}
-        
+
 		.actions ul   {background: var(--w--gray4);    padding: 20px;  box-shadow: 5px 5px 8px -2px  var(--w--gray2);}
 		.actions li > label:hover   {color: var(--w--marked);}
 		.actions li.active > label  {color: var(--w--marked);}
@@ -1540,23 +1543,24 @@ echo exec('/usr/bin/docker -v');*/
         .form-row-checkbox label, .form-row-radio label {cursor: pointer;}
 		.selector-tables textarea   {overflow-wrap: normal;}
 		.predefined-sets span.link-set:not(:first-child):before	{content: '\00A0 | \00A0';}
-		
+
         footer	 {font-size: 80%;  margin-top: 70px;}
 		.config p	{margin: 8px 0;	line-height: 1.4em;}
 		.tooltip	{background: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiI+CjxwYXRoIGQ9Im0xMjggMjIuMTU4YTEwNS44NCAxMDUuODQgMCAwIDAgLTEwNS44NCAxMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAxMDUuODQgMTA1Ljg0IDEwNS44NCAxMDUuODQgMCAwIDAgMTA1Ljg0IC0xMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAtMTA1Ljg0IC0xMDUuODR6bTAgMzIuNzZjNS4xNiAwLjExNyA5LjU1IDEuODc1IDEzLjE4IDUuMjczIDMuMzQgMy41NzUgNS4wNyA3Ljk0IDUuMTkgMTMuMDk2LTAuMTIgNS4xNTYtMS44NSA5LjQwNC01LjE5IDEyLjc0NC0zLjYzIDMuNzUtOC4wMiA1LjYyNS0xMy4xOCA1LjYyNXMtOS40LTEuODc1LTEyLjc0LTUuNjI1Yy0zLjc1LTMuMzQtNS42My03LjU4OC01LjYzLTEyLjc0NHMxLjg4LTkuNTIxIDUuNjMtMTMuMDk2YzMuMzQtMy4zOTggNy41OC01LjE1NiAxMi43NC01LjI3M3ptLTE2LjM1IDUzLjc5MmgzMi43OXY5Mi4zN2gtMzIuNzl2LTkyLjM3eiIgZmlsbC1ydWxlPSJldmVub2RkIiBmaWxsPSIjNzJhN2NmIi8+Cjwvc3ZnPgo=');
             background-size: 16px 16px;     background-position: left center;   background-repeat: no-repeat;   min-height: 16px;   display: inline-block;  padding-left: 16px; cursor: help;   margin-left: 4px;}
+		.clickable	{cursor: pointer;}
 
-		header .version	{font-size: 12px; color: var(--w--gray6); margin-left: 10px; vertical-align: super; }
-		header h2 { margin: 4px 0;  transition: font-size .1s; }
-		header h2 svg {vertical-align: bottom;  transition: width .1s, height .1s; }
-		header h4 { margin: 4px 0;  transition: font-size .1s; }
-		.sticky	{ position: fixed; top: 0; z-index: 1;  background-color: var(--w--bg);  /*border: 1px solid blue;*/}
-		.sticky.sticked	{  /*background: lightgray;*/ }
-			.sticked h2 { float: left; font-size: 1.2em; }
-			.sticked h4 { /*margin: 4px 0;*/ font-size: 1em; }
-			.sticked svg { width: 24px; height: 24px; }
-			.sticked .config-sys { float: left;  padding-left: 50px; }
-			.sticked pre { margin: 4px 0; }
+		header .version	{font-size: 12px; color: var(--w--gray6); margin-left: 10px; vertical-align: super;}
+		header h2 {margin: 4px 0;  transition: font-size .1s;}
+		header h2 svg {vertical-align: bottom;  transition: width .1s, height .1s;}
+		header h4 {margin: 4px 0;  transition: font-size .1s;}
+		.sticky	{position: fixed; top: 0; z-index: 1; width: 100%;  background-color: var(--w--bg);}
+		.sticky.sticked	{}
+			.sticked h2 {float: left; font-size: 1.2em;}
+			.sticked h4 {font-size: 1em;}
+			.sticked svg {width: 24px; height: 24px;}
+			.sticked .config-sys {float: left;  padding-left: 50px;}
+			.sticked pre {margin: 4px 0;}
 
         @media screen and (min-width: 900px) {
             .actions    {position: relative;}
@@ -1594,7 +1598,7 @@ echo exec('/usr/bin/docker -v');*/
 
 		init: () => {
 			let stickyHeadPart = document.getElementById('head_part');
-            let stickAfter = 1;
+            let stickAfter = 5;
             let paddingAdd = 10;
             let stickyHeadPartHeight = parseInt(getComputedStyle(stickyHeadPart, null).height.replace('px', ''));
             document.body.style.paddingTop = stickyHeadPartHeight + paddingAdd + 'px';
@@ -1974,10 +1978,10 @@ echo exec('/usr/bin/docker -v');*/
                                                 return "<div{$Dump->checkFieldError_printClass('databaseQuery', 'form-row')}>
                                                         <p><i>Credentials:</i><br>
                                                         	<pre>" .
-                                                        	"user: {$Dump->dbConf['username']}\n" .
-                                                        	"pass: {$Dump->dbConf['password']}\n" .
-                                                        	"dbas: {$Dump->dbConf['database']}\n" .
-                                                        	"host: {$Dump->dbConf['host']}\n" .
+                                                        	"user: {$Dump->getDbConf('username')}\n" .
+                                                        	"pass: {$Dump->getDbConf('password')}\n" .
+                                                        	"dbas: {$Dump->getDbConf('database')}\n" .
+                                                        	"host: {$Dump->getDbConf('host')}\n" .
                                                         	"</pre>
                                                         </p>
                                                         <label>Query to exec:</label>

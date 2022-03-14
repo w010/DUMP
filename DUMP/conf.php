@@ -1,6 +1,6 @@
 <?php
 /**
- * DUMP - MIGRATION/BACKUP/ENV TOOL FOR TYPO3
+ * DUMP - WTP DUMP/MIGRATION/BACKUP TOOL FOR TYPO3
  * wolo.pl '.' studio
  * 2013-2022
  *
@@ -65,7 +65,7 @@ $optionsCustom = [
 	'fetchFiles_defaultSourceDomain' => 'http://wolo.pl',
 
     // Adminer enable
-    'adminer' => true, 
+    'adminer' => true,
 
 	// Default preselection of files and dirs for filesystem archive
 	// 'defaultIncludeFilesystem' => [],
@@ -102,9 +102,16 @@ $optionsCustom = [
  */
 
 
-$optionsCustom['dontUseTYPO3Init'] = true;
-defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 9);
+    $optionsCustom['dontUseTYPO3Init'] = true;
+    //defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 9);
+    //defined('TYPO3_MAJOR_BRANCH_VERSION') or define('TYPO3_MAJOR_BRANCH_VERSION', 0);
 
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'] = 'typo3';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'] = 'typo3';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'] = 'typo3_v11';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'] = 'localhost';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['port'] = '3306';
+    $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['driver'] = 'mysqli';
 
 /*
 	Here you can hardcode database credentials, if not using typo3 local configuration.
