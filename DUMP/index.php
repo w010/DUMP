@@ -1,13 +1,14 @@
 <?php
+//declare(strict_types=1);
 
 //die('no access');
 
 
 /**
  *  WTP DUMP/BACKUP TOOL FOR TYPO3 - wolo.pl '.' studio
- *  2013-2021
+ *  2013-2022
  *
- *  Supported TYPO3 versions: 4, 6, 7, 8, 9, 10
+ *  Supported TYPO3 versions: 4, 6, 7, 8, 9, 10 (and probably 11 too)
  *
  *  (Note, that recently I don't test it in older TYPO3, so if it doesn't work try older DUMP version)
  */
@@ -34,71 +35,38 @@
  */
 
 
+
+const DUMP_VERSION = '3.8.90';
+
+
+
+
+// this was needed here for something. [check and describe! probably in 9.x]
 use TYPO3\CMS\Core\Core\ApplicationContext;
 
-define ('DUMP_VERSION', '3.8.0');
 
 
 
-error_reporting(E_ALL ^ E_NOTICE ^ E_WARNING ^ E_STRICT ^ E_DEPRECATED);
 // on some projects / envs might be needed to see what's happening when you 500)
-//error_reporting(-1); // reports all errors
-ini_set('display_errors', '1'); // shows all errors
-//ini_set('log_errors', 1);
+error_reporting(E_ALL ^ E_NOTICE ^ E_WARNING ^ E_STRICT ^ E_DEPRECATED);
+//error_reporting(E_ALL);
+ini_set('display_errors', 'On'); // shows all errors
+//ini_set('display_startup_errors', 'On');
+//ini_set('log_errors', 'On');
 
 
 
 
-// default options for this script operation
-$optionsDefault = [
+// init some var used here around. todo later: get rid of it, if possible
+$databaseConfiguration = [];
 
-    // default project name is generated from subdomain, but it's not always ok - may be set
-    'defaultProjectName' => '',
 
-    // don't use native path and version detection (it needs typo3 sources to work. otherwise uses internal PATH_site detection)
-	'dontUseTYPO3Init' => false,
 
-	// script generates command line, may display it, but doesn't exec it
-	'dontExecCommands' => 0,
 
-	// exec generated commands, but don't display them
-	'dontShowCommands' => 0,
-
-    // query database using cli bin execute or mysqli connection
-    'defaultDatabaseQueryMethod' => Dump::DATABASE_QUERY_METHOD__MYSQLI,
-
-	// default tables for "Omit these tables" (Database Export action)
-	'defaultOmitTables' => ['index_rel', 'sys_log', 'sys_history', 'index_fulltext', 'sys_refindex', 'index_words', 'tx_extensionmanager_domain_model_extension'],
-
-    // default preselection of files and dirs (Filesystem Pack action)
-    'defaultIncludeFilesystem' => ['typo3conf'],
-    'defaultExcludeFilesystem' => ['fileadmin/content', 'fileadmin/_processed_', 'fileadmin/_temp_', 'fileadmin/user_upload', 'typo3conf/AdditionalConfiguration_host.php'],
-
-    // list items in exclude selector from these directories (Filesystem Pack action)
-    'defaultExcludeFilesystem_listItemsFromDirs' => ['fileadmin', 'typo3conf'],
-
-	// adds docker exec on container to command line
-	'docker' => false,
-
-	// if docker=true, container name must be specified
-	'docker_containerSql' => '',
-	'docker_containerPhp' => '',
-
-    // domain to replace for fetch file urls (Manually Fetch Files action)
-	'fetchFiles_defaultSourceDomain' => '',
-
-    // preconfigured lists of domains for environments ['key' => 'domains linebreak-separated-list'] (Domains Update action)
-    'updateDomains_defaultDomainSet' => [],
-
-	// prefill input with domains from this key domain-set ('key')
-    'updateDomains_defaultDomainSetFrom' => '',
-    'updateDomains_defaultDomainSetTo' => '',
-];
-
-// custom options may be included to override
-$optionsCustom = [];
-include ('conf.php');
-$options = array_replace($optionsDefault, $optionsCustom);
+// custom options may be included to override, if conf exists
+$options = Dump::readConf();
+// get the config
+Dump::getConf();
 
 
 
@@ -106,6 +74,8 @@ $options = array_replace($optionsDefault, $optionsCustom);
 if (file_exists('../typo3conf/localconf.php')  &&  !file_exists('../typo3conf/LocalConfiguration.php'))    {
 	define('TYPO3_MAJOR_BRANCH_VERSION', 4);
 }
+
+// $_InitEnv_encaps
 
 // try to use native path and version detection, but without running many other initial things
 if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION')  ||  ( defined('TYPO3_MAJOR_BRANCH_VERSION')  &&  TYPO3_MAJOR_BRANCH_VERSION > 4  &&  TYPO3_MAJOR_BRANCH_VERSION != 10  ) ) )  {
@@ -190,6 +160,8 @@ if (!$options['dontUseTYPO3Init']  &&  ( !defined('TYPO3_MAJOR_BRANCH_VERSION') 
     }
 }
 
+
+
 // do the classic init
 if (!defined('PATH_site'))	{
 	define('PATH_thisScript', str_replace('//', '/', str_replace('\\', '/',
@@ -201,9 +173,9 @@ if (!defined('PATH_site'))	{
 }
 
 
-define('PATH_dump', PATH_site . 'DUMP/');
+const PATH_dump = PATH_site . 'DUMP/';
 // in some projects needs to be defined
-define('TYPO3_MODE', 'BE');
+const TYPO3_MODE = 'BE';
 
 
 // if version not detected or preconfigured, set to 0 - script still is usable if db is set manually
@@ -212,79 +184,103 @@ if (!defined('TYPO3_MAJOR_BRANCH_VERSION'))
 
 
 
-// note that in some versions (9?) TYPO3_MAJOR_BRANCH_VERSION may be a string!
-switch (TYPO3_MAJOR_BRANCH_VERSION)    {
-
-    case 4:
-	    if (file_exists(PATH_site.'typo3conf/localconf.php')) {
-		    include_once(PATH_site . 'typo3conf/localconf.php');
-	    }
-	    $databaseConfiguration['username'] = $typo_db_username;
-	    $databaseConfiguration['password'] = $typo_db_password;
-	    $databaseConfiguration['host'] =     $typo_db_host;
-	    $databaseConfiguration['database'] = $typo_db;
-	    break;
-
-    case 6:
-    case 7:
-        if (file_exists(PATH_site.'typo3conf/LocalConfiguration.php'))	{
-	        $GLOBALS['TYPO3_CONF_VARS'] = include_once(PATH_site.'typo3conf/LocalConfiguration.php');
-	        // may be used sometimes in AdditionalConfiguration
-	        @include_once(PATH_site.'typo3/sysext/core/Classes/Utility/ExtensionManagementUtility.php');
-	        @include_once(PATH_site.'typo3conf/AdditionalConfiguration.php');
-        }
-        // in general Dump class database config structure/naming is basing on this one from 6 and 7 branches - so it expects keys: username, password, host, database
-	    $databaseConfiguration = $GLOBALS['TYPO3_CONF_VARS']['DB'];
-        break;
-        
-    case 8:
-    case 9:
-	    if (file_exists(PATH_site.'typo3conf/LocalConfiguration.php'))	{
-		    $GLOBALS['TYPO3_CONF_VARS'] = include_once(PATH_site.'typo3conf/LocalConfiguration.php');
-		    // may be used sometimes in AdditionalConfiguration
-		    @include_once(PATH_site.'typo3/sysext/core/Classes/Utility/ExtensionManagementUtility.php');
-		    @include_once(PATH_site.'typo3conf/AdditionalConfiguration.php');
-	    }
-	    $databaseConfiguration['username'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'];
-	    $databaseConfiguration['password'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'];
-	    $databaseConfiguration['host'] =     $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'];
-	    $databaseConfiguration['database'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'];
-	    break;
-
-    case 10:
-        // dontUseTYPO3Init in 10.x just won't work in projects that uses classes calls in AdditionalConfiguration, first problem is \Environment::getPublicPath() which is empty and no way to set the value from here
-        // in such case you have to use your manual db config in conf.php and forget about including typo3 config
-        /*if ($options['dontUseTYPO3Init']  &&  file_exists(PATH_site.'typo3conf/LocalConfiguration.php'))	{
-		    $GLOBALS['TYPO3_CONF_VARS'] = include_once(PATH_site.'typo3conf/LocalConfiguration.php');
-		    @include_once(PATH_site.'typo3/sysext/core/Classes/Core/Environment.php');
-		    @include_once(PATH_site.'typo3conf/AdditionalConfiguration.php');
-	    }*/
-        // when using full init, we don't need to do anything, the whole conf is already included and available here
-    default:
-	    $databaseConfiguration['username'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'];
-	    $databaseConfiguration['password'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'];
-	    $databaseConfiguration['host'] =     $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'];
-	    $databaseConfiguration['database'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'];
-	    break;
-}
 
 
 
+/**
+ * Init system/Typo configuration
+ * Encapsulated from the global scope
+ * 	// [for now, encapsulation is only tested here]
+ * @param $options
+ * @param $optionsCustom
+ */
+$_InitConfig_encaps = function(&$options, &$optionsCustom) {
+
+	global $typo_db_username, $typo_db_password, $typo_db_host, $typo_db,
+		$databaseConfiguration;
 
 
 
-// some old constants I used in many projects
-//if (!defined('DEV'))				  define('DEV',   false);
-//if (!defined('LOCAL'))			  define('LOCAL', false);
+	// note that in some versions (9?) TYPO3_MAJOR_BRANCH_VERSION may be a string!
+	switch (TYPO3_MAJOR_BRANCH_VERSION)    {
 
-// set contexts as const for shorthand. use defined env var, if not found check old projects fallback to GLOBALS
-if (!defined('TYPO3_CONTEXT'))      define('TYPO3_CONTEXT',     getenv('TYPO3_CONTEXT') ? getenv('TYPO3_CONTEXT') : $GLOBALS["STAGE_IDENTIFIER"]);
-if (!defined('INSTANCE_CONTEXT'))   define('INSTANCE_CONTEXT',  getenv('INSTANCE_CONTEXT') ? getenv('INSTANCE_CONTEXT') : $GLOBALS["CONTEXT_IDENTIFIER"]);
+		case 4:
+			if (file_exists(PATH_site.'typo3conf/localconf.php')) {
+				include_once(PATH_site . 'typo3conf/localconf.php');
+			}
+			$databaseConfiguration['username'] = $typo_db_username;
+			$databaseConfiguration['password'] = $typo_db_password;
+			$databaseConfiguration['host'] =     $typo_db_host;
+			$databaseConfiguration['database'] = $typo_db;
+			break;
+
+		case 6:
+		case 7:
+			if (file_exists(PATH_site.'typo3conf/LocalConfiguration.php'))	{
+				$GLOBALS['TYPO3_CONF_VARS'] = include_once(PATH_site.'typo3conf/LocalConfiguration.php');
+				// may be used sometimes in AdditionalConfiguration
+				@include_once(PATH_site.'typo3/sysext/core/Classes/Utility/ExtensionManagementUtility.php');
+				@include_once(PATH_site.'typo3conf/AdditionalConfiguration.php');
+			}
+			// in general Dump class database config structure/naming is basing on this one from 6 and 7 branches - so it expects keys: username, password, host, database
+			$databaseConfiguration = $GLOBALS['TYPO3_CONF_VARS']['DB'];
+			break;
+
+		case 8:
+		case 9:
+			if (file_exists(PATH_site.'typo3conf/LocalConfiguration.php'))	{
+				$GLOBALS['TYPO3_CONF_VARS'] = include_once(PATH_site.'typo3conf/LocalConfiguration.php');
+				// may be used sometimes in AdditionalConfiguration
+				@include_once(PATH_site.'typo3/sysext/core/Classes/Utility/ExtensionManagementUtility.php');
+				@include_once(PATH_site.'typo3conf/AdditionalConfiguration.php');
+			}
+			$databaseConfiguration['username'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'];
+			$databaseConfiguration['password'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'];
+			$databaseConfiguration['host'] =     $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'];
+			$databaseConfiguration['database'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'];
+			break;
+
+		case 10:
+			// dontUseTYPO3Init in 10.x just won't work in projects that uses classes calls in AdditionalConfiguration, first problem is \Environment::getPublicPath() which is empty and no way to set the value from here
+			// in such case you have to use your manual db config in conf.php and forget about including typo3 config
+			/*if ($options['dontUseTYPO3Init']  &&  file_exists(PATH_site.'typo3conf/LocalConfiguration.php'))	{
+				$GLOBALS['TYPO3_CONF_VARS'] = include_once(PATH_site.'typo3conf/LocalConfiguration.php');
+				@include_once(PATH_site.'typo3/sysext/core/Classes/Core/Environment.php');
+				@include_once(PATH_site.'typo3conf/AdditionalConfiguration.php');
+			}*/
+
+			// when using full init, we don't need to do anything, the whole conf is already included and available here
+		default:
+			$databaseConfiguration['username'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['user'];
+			$databaseConfiguration['password'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['password'];
+			$databaseConfiguration['host'] =     $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['host'];
+			$databaseConfiguration['database'] = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default']['dbname'];
+			break;
+	}
 
 
-// reinclude config (overwrite settings which uses conditions on some constants defined above)
-include ('conf.php');
-$options = array_replace($options, $optionsCustom);
+
+
+
+
+	// some old constants I used in many projects
+	//if (!defined('DEV'))				  define('DEV',   false);
+	//if (!defined('LOCAL'))			  define('LOCAL', false);
+
+	// set contexts as const for shorthand. use defined env var, if not found check old projects fallback to GLOBALS
+	if (!defined('TYPO3_CONTEXT'))      define('TYPO3_CONTEXT',     getenv('TYPO3_CONTEXT') ? getenv('TYPO3_CONTEXT') : $GLOBALS["STAGE_IDENTIFIER"]);
+	if (!defined('INSTANCE_CONTEXT'))   define('INSTANCE_CONTEXT',  getenv('INSTANCE_CONTEXT') ? getenv('INSTANCE_CONTEXT') : $GLOBALS["CONTEXT_IDENTIFIER"]);
+
+
+	// reinclude config (overwrite settings which uses conditions on some constants defined above)
+	include ('conf.php');
+	$options = array_replace($options, $optionsCustom);
+
+
+	// as for now, this encapsulation is only tested here 
+};
+$_InitConfig_encaps($options, $optionsCustom);
+unset($_InitConfig_encaps);
 
 
 
@@ -297,19 +293,79 @@ if ($GLOBALS['dump_adminer_load'])	{
 
 
 
-$Dump = new Dump();
+$Dump = new Dump(/*$options, $databaseConfiguration*/);
 $Dump->main();
 
 
+
+/** 
+ * Damn
+ * Useful
+ * Maintenance
+ * Program 
+ */
 class Dump  {
 
-	// define some variables. all are public, because this script is for private use and no need to control such things.
+	// define some variables. all can be public, this tool was intended for private admin use, so no need to control such things.
 
-	public $options = [];
+	/**
+	 * Default options - to be merged with incoming settings from conf.
+	 * (settings ref)
+	 */
+	protected static $optionsDefault = [
+
+		// default project name is generated from subdomain, but it's not always ok - may be set
+		'defaultProjectName' => '',
+	
+		// don't use native path and version detection (it needs typo3 sources to work. otherwise uses internal PATH_site detection)
+		'dontUseTYPO3Init' => false,
+	
+		// script generates command line, may display it, but doesn't exec it
+		'dontExecCommands' => 0,
+	
+		// exec generated commands, but don't display them
+		'dontShowCommands' => 0,
+	
+		// query database using cli bin execute or mysqli connection
+		'defaultDatabaseQueryMethod' => Dump::DATABASE_QUERY_METHOD__MYSQLI,
+	
+		// default tables for "Omit these tables" (Database Export action)
+		'defaultOmitTables' => ['index_rel', 'sys_log', 'sys_history', 'index_fulltext', 'sys_refindex', 'index_words', 'tx_extensionmanager_domain_model_extension'],
+	
+		// default preselection of files and dirs (Filesystem Pack action)
+		'defaultIncludeFilesystem' => ['typo3conf'],
+		'defaultExcludeFilesystem' => ['fileadmin/content', 'fileadmin/_processed_', 'fileadmin/_temp_', 'fileadmin/user_upload', 'typo3conf/AdditionalConfiguration_host.php'],
+	
+		// list items in exclude selector from these directories (Filesystem Pack action)
+		'defaultExcludeFilesystem_listItemsFromDirs' => ['fileadmin', 'typo3conf'],
+	
+		// adds docker exec on container to command line
+		'docker' => false,
+	
+		// if docker=true, container name must be specified
+		'docker_containerSql' => '',
+		'docker_containerPhp' => '',
+	
+		// domain to replace for fetch file urls (Manually Fetch Files action)
+		'fetchFiles_defaultSourceDomain' => '',
+	
+		// preconfigured lists of domains for environments ['key' => 'domains linebreak-separated-list'] (Domains Update action)
+		'updateDomains_defaultDomainSet' => [],
+	
+		// prefill input with domains from this key domain-set ('key')
+		'updateDomains_defaultDomainSetFrom' => '',
+		'updateDomains_defaultDomainSetTo' => '',
+	];
+
+	// working configuration
+	protected static $options = [];
 	public $dbConf = [];
 
 	// html content to display before form
 	public $configInfoHeader = '';
+
+	// context info
+	public $sysContextInfo = '';
 
 	// message/error to show
 	public $messages = [];
@@ -329,9 +385,6 @@ class Dump  {
 	// docker exec cmd prefix
 	public $dockerContainerCmd = [];
 
-	const DATABASE_QUERY_METHOD__MYSQLI = 'mysqli';
-	const DATABASE_QUERY_METHOD__CLI = 'cli';
-
 	// database connection
 	public $dbConnection = null; 
 
@@ -340,24 +393,76 @@ class Dump  {
 	public $phpVersion = '';
 
 
-	function __construct() {
-		global $options;
-		global $databaseConfiguration;
-		$this->options = &$options;
-		$this->dbConf = &$databaseConfiguration;
+	const CONFIG_FILENAME = 'conf.php';
+	const DATABASE_QUERY_METHOD__MYSQLI = 'mysqli';
+	const DATABASE_QUERY_METHOD__CLI = 'cli';
+
+
+
+	/*protected */function __construct() {
+		//$this->options = $options;
+		//$this->dbConf = $databaseConfiguration;
 
 		$this->PATH_site = PATH_site;
 		$this->PATH_dump = PATH_dump;
 
 		// if docker is used, docker exec CONTAINER must be prepended before mysqldump etc.
-		if ($this->options['docker'])   {
+		if ($this->option('docker'))   {
 		    // docker exec -it causes some tty error in console
-			$this->dockerContainerCmd['sql'] = "docker exec -i {$this->options['docker_containerSql']}   ";
-			$this->dockerContainerCmd['php'] = "docker exec -i {$this->options['docker_containerPhp']}   ";
+			$this->dockerContainerCmd['sql'] = "docker exec -i {$this->option('docker_containerSql')}   ";
+			$this->dockerContainerCmd['php'] = "docker exec -i {$this->option('docker_containerPhp')}   ";
 		}
 		
 		$this->databaseConnect();
 		$this->phpVersion = phpversion();
+	}
+
+	public static function configure($options = []) {
+		// if this.options are empty: merge incoming onto defaults, assign result to options
+		// otherwise: merge incoming onto current config 
+	}
+
+	public static function readConf() {
+		//$options = [];
+		$optionsCustom = [];
+		try {
+			include Dump::CONFIG_FILENAME;
+			//var_export($optionsCustom); die('stop');
+			
+			
+			$options = array_replace(Dump::$optionsDefault, $optionsCustom);
+			
+			// todo: make sure the var has the value as expected, after inluding file here, not in global scope
+			
+		} catch (Exception $e){
+			var_export($e); die('stop');
+		}
+		return $options;
+	}
+
+    /**
+	 * Return final working configuration - full or single var
+	 * (static - can be called before instantiation and used by some external/sub objects)
+     * @param string $optionName
+     * @return array|mixed
+     */
+	public static function getConf($optionName = '') {
+		if ($optionName)	{
+			return static::$options[$optionName];
+		}
+		return static::$options;
+	}
+
+	/**
+	 * Get single option value
+	 * @internal
+     * @param string $optionName
+     * @return mixed
+     */
+	public function option(string $optionName = '') {
+		if ($optionName)	{
+			return static::$options[$optionName];
+		}
 	}
 
 	function main() {
@@ -376,8 +481,8 @@ class Dump  {
 		// predicted project name, taken from domain name or conf (only when not submitted, on first run)
 		if (!$_POST['submit']  &&  !$_POST['projectName']) {
 			[$this->projectName] = preg_split('@\.@', $_SERVER['HTTP_HOST']);
-			if ($this->options['defaultProjectName'])
-				$this->projectName = $this->options['defaultProjectName'];
+			if ($this->option('defaultProjectName'))
+				$this->projectName = $this->option('defaultProjectName');
 		}
 
 		// add some header system & conf informations
@@ -385,9 +490,9 @@ class Dump  {
 			. '<i class="tooltip" title="For credentials used go to \'Database - exec QUERY\'" onclick="document.getElementById(\'action_databaseQuery\').click();"></i>'
 			. (file_exists(PATH_dump.'adminer.php') ? ' / <a href="adminer.php">ADMINER</a>' : '')
 			.'</p>';
-		if ($this->options['docker'])   {
-			$this->configInfoHeader .= '<p>- docker sql: <span class="info">' . $this->options['docker_containerSql'] . '</span></p>';
-			$this->configInfoHeader .= '<p>- docker php: <span class="info">' . $this->options['docker_containerPhp'] . '</span></p>';
+		if ($this->option('docker'))   {
+			$this->configInfoHeader .= '<p>- docker sql: <span class="info">' . $this->option('docker_containerSql') . '</span></p>';
+			$this->configInfoHeader .= '<p>- docker php: <span class="info">' . $this->option('docker_containerPhp') . '</span></p>';
 		}
 		$this->configInfoHeader .= '<p>- branch detected: <span class="info"><b>' . TYPO3_MAJOR_BRANCH_VERSION
             . (defined('TYPO3_version') ? '</b></span> / version: <b><span class="info">' . TYPO3_version . '</span></b>' : '') . '</b></span></p>';
@@ -627,7 +732,7 @@ class Dump  {
 	 */
 	private function action_domainsUpdate() {
 
-		$queryMethod = $_POST['databaseQuery_method']  OR  $this->options['defaultDatabaseQueryMethod'];
+		$queryMethod = $_POST['databaseQuery_method']  OR  $this->option('defaultDatabaseQueryMethod');
 
 		if (!$this->paramsRequiredPass(['domainsFrom' => $_POST['domainsFrom'], 'domainsTo' => $_POST['domainsTo'], 'databaseQuery_method' => $queryMethod]))
 			return;
@@ -701,7 +806,7 @@ class Dump  {
 	 */
 	private function action_databaseQuery($databaseQuery)	{
 
-	    $queryMethod = $_POST['databaseQuery_method']  ?:  $this->options['defaultDatabaseQueryMethod'];
+	    $queryMethod = $_POST['databaseQuery_method']  ?:  $this->option('defaultDatabaseQueryMethod');
 
 		if (!$this->paramsRequiredPass(['databaseQuery' => $databaseQuery, 'databaseQuery_method' => $queryMethod]))
 			return;
@@ -947,7 +1052,7 @@ class {$xclassName} extends \\{$originalClassFullName}	{
 	/* exec shell command */
 	private function exec_control($cmd, $saveCmd = true) {
 	    $output = '';
-		if ($this->options['dontExecCommands']) {
+		if ($this->option('dontExecCommands')) {
 			$this->msg('command not executed - exec is disabled - @see option dontExecCommands', 'info');
 		}
 		elseif ($_POST['dontExec']) {
@@ -976,7 +1081,7 @@ echo exec('/usr/bin/docker -v');*/
 
 
 
-		/*if ($this->options['docker'])   {
+		/*if ($this->option('docker'))   {
 			$this->msg('running on docker - cmd probably didn\'t run. execute manually', 'info');
         }*/
 
@@ -990,7 +1095,7 @@ echo exec('/usr/bin/docker -v');*/
 
     /* exec query on database connection */
 	private function mysqliExecQuery($query)  {
-		if ($this->options['dontExecCommands'])
+		if ($this->option('dontExecCommands'))
 			$this->msg('query not executed - exec is disabled - @see option dontExecCommands', 'info');
         elseif ($_POST['dontExec'])
 			$this->msg('(query not executed)', 'info');
@@ -1043,20 +1148,45 @@ echo exec('/usr/bin/docker -v');*/
 
 	// INFO DISPLAY
 
+	private function getSysContextInfo()	{
+		$infoLevel = 'info';
+
+			//if (defined('DEV') && DEV)							$environment = 'DEV';
+			//if (defined('LOCAL') && LOCAL)						$environment = 'LOCAL';
+			//if (getenv('TYPO3_CONTEXT') == 'Development')   		$environment = 'Development';
+			//if (getenv('TYPO3_CONTEXT') && !$environment)   		$environment = getenv('TYPO3_CONTEXT');
+
+		$typo3_context = getenv('TYPO3_CONTEXT');
+		if (!$typo3_context)	{
+			$typo3_context = 'assumed Production';	// if not detected at this point, assume and warn that it's public
+			$infoLevel = 'important';
+		}
+		if ($typo3_context == 'Production' || $typo3_context == 'PUBLIC')	{
+			$infoLevel = 'important';
+		}
+
+		$instance_context = getenv('INSTANCE_CONTEXT');	// q3i: putenv("INSTANCE_CONTEXT=local-docker");
+
+		return [
+			'typo3_context' => $typo3_context,
+			'instance_context' => $instance_context,
+			'infoLevel' => $infoLevel,
+		];
+    }
+
 	private function addEnvironmentMessage()	{
-		$environment = '';
-		if (defined('DEV') && DEV)							$environment = 'DEV';
-		if (defined('LOCAL') && LOCAL)						$environment = 'LOCAL';
-		if (getenv('TYPO3_CONTEXT') == 'Development')   $environment = 'Development';
-		if (getenv('TYPO3_CONTEXT') && !$environment)   $environment = getenv('TYPO3_CONTEXT');
-		if (!$environment)					    				$environment = 'PUBLIC';	// if not detected at this point, assume and warn that it's public
-		if ($environment == 'Production' || $environment == 'PUBLIC')
-			$environment = '<span class="error">'.$environment.' !!!!</span>';
-		else
-			$environment = '<span class="info">'.$environment.'</span>';
-		if (INSTANCE_CONTEXT)
-			$environment .= ' - instance: <span class="info"><b>' . INSTANCE_CONTEXT . '</b></span>';
-		$this->configInfoHeader .= '<h4>running on ' . $environment . '</h4>';
+		$sys = $this->getSysContextInfo();
+		$typo3_context_info = $sys['typo3_context'];
+
+		// additional mark important contexts
+		if (in_array($sys['typo3_context'], ['Production', 'assumed Production', 'PUBLIC']))
+            $typo3_context_info .= ' !!!!';
+
+		$message = '<span class="'.$sys['infoLevel'].'">'.$typo3_context_info.'</span>';
+
+		if ($sys['instance_context'])
+			$message .= '&nbsp;&nbsp; instance: <span class="info"><b>' . $sys['instance_context'] . '</b></span>';
+		$this->sysContextInfo .= '<h4>running on: ' . $message . '</h4>';
 	}
 
 	/**
@@ -1082,7 +1212,7 @@ echo exec('/usr/bin/docker -v');*/
 	/* display generated command lines */
 	public function displayGeneratedCommands()  {
 		$content = '';
-		if ($this->cmds  &&  !$this->options['dontShowCommands'])   {
+		if ($this->cmds  &&  !$this->option('dontShowCommands'))   {
             $cmdLines = [];
 		    foreach ($this->cmds as $i => $cmd) {
 			    $cmdLines[] = "&gt; <span class=\"cmdLine\" id=\"commandLineGenerated{$i}\" onclick=\"selectText('commandLineGenerated{$i}');\">" . $cmd['command'] . "</span>";
@@ -1148,7 +1278,7 @@ echo exec('/usr/bin/docker -v');*/
 	function getOmitTables()	{
 		if ($_POST['omitTables'])
 			return htmlspecialchars($_POST['omitTables']);
-		return implode(chr(10), $this->options['defaultOmitTables']);
+		return implode(chr(10), $this->option('defaultOmitTables'));
 	}
 
 
@@ -1368,42 +1498,43 @@ echo exec('/usr/bin/docker -v');*/
 	}
 }
 
-?>
-<html>
+?><html>
 <head>
 	<title>DUMP - <?php print $_SERVER['HTTP_HOST']; ?></title>
-	<style type='text/css'>
-        body    {font-family: Arial, Tahoma, sans-serif;}
+	<style>
+		*, ::after, ::before { box-sizing: border-box;	}
+		:root	{   --w--bg: #fefefe; --w--primary: #111;	--w--link: #03d;  --w--info: #282; --w--error: #d00;  --w--marked: darkorange; --w--gray1: #a9a9a9; --w--gray2: #aaa;  --w--gray3: #bbb;  --w--gray4: #eee;  --w--gray5: gainsboro;  --w--gray6: #999;}
+        body    {font-family: Arial, Tahoma, sans-serif; margin-top: 0; padding-top: 170px; background-color: var(--w--bg); color: var(--w--primary); }
 		ul  {list-style: none;  float: left;    margin-top: 0;  padding: 0;}
         li  {margin: 4px 0;}
         pre     {line-height: 1.2em; white-space: pre-wrap;}
 		label	{clear: both;   display: inline-block;}
         label pre   {margin: 0;}
 		label input	{float: left;   cursor: pointer;}
-        a	{text-decoration: none;		color: #03d;}
+        a	{text-decoration: none;		color: var(--w--link);}
 		a:hover	{text-decoration: underline;}
 
         .to-left	{float: left;}
 		.hidden	 {display: none !important;}
 		.indent	 {margin-left: 40px;}
         .clear	{clear: both;}
-		.error	{color: #d00;}
-		.info	{color: #282;   font-style: italic;     font-family: monospace;     font-size: 1.2em;   font-weight: 100;}
+		.error	{color: var(--w--error);}
+		.info	{color: var(--w--info);   font-style: italic;     font-family: monospace;     font-size: 1.2em;   font-weight: 100;}
         
         select   {margin-right: 10px;}
 		input[type=radio]:checked + .action-sub-options  {display: block;}
 		input[type=checkbox]    {margin: 2px 6px 2px 0;}
         input[type=radio]       {margin: 2px 6px 2px 0;     outline: none;     cursor: pointer;}
         input[type=submit]      {padding: 6px 16px; cursor: pointer;}
-        input[type=submit]:hover  { background: darkorange;}
+        input[type=submit]:hover  { background: ;}
         input[disabled], textarea[disabled] {cursor:not-allowed;}
-        input[type=text], select, textarea  {border: 1px solid #a9a9a9;     box-shadow: inset 4px 4px 5px -2px #bbb;  padding: 6px;}
+        input[type=text], select, textarea  {border: 1px solid var(--w--gray1);     box-shadow: inset 4px 4px 5px -2px var(--w--gray3);  padding: 6px;}
         
-		.actions ul   {background: #eee;    padding: 20px;  box-shadow: 5px 5px 8px -2px #aaa;}
-		.actions li > label:hover   {color: darkorange;}
-		.actions li.active > label  {color: darkorange;}
+		.actions ul   {background: var(--w--gray4);    padding: 20px;  box-shadow: 5px 5px 8px -2px  var(--w--gray2);}
+		.actions li > label:hover   {color: var(--w--marked);}
+		.actions li.active > label  {color: var(--w--marked);}
 		.actions-selector > ul > li > label > span	{float: left;   width: 260px;   cursor: pointer;}
-		.action-sub-options  {display: none;    padding: 10px 20px 20px;    background: gainsboro;  margin: 10px 0 20px 20px;  box-shadow: 5px 5px 8px -2px #aaa;}
+		.action-sub-options  {display: none;    padding: 10px 20px 20px;    background: var(--w--gray5);  margin: 10px 0 20px 20px;  box-shadow: 5px 5px 8px -2px  var(--w--gray2);}
 		.action-sub-options label   {display: block;        padding: 2px 0 4px;}
 		.form-row {display: block;  margin-bottom: 12px;}
         .form-row-checkbox label, .form-row-radio label {cursor: pointer;}
@@ -1415,71 +1546,127 @@ echo exec('/usr/bin/docker -v');*/
 		.tooltip	{background: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiI+CjxwYXRoIGQ9Im0xMjggMjIuMTU4YTEwNS44NCAxMDUuODQgMCAwIDAgLTEwNS44NCAxMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAxMDUuODQgMTA1Ljg0IDEwNS44NCAxMDUuODQgMCAwIDAgMTA1Ljg0IC0xMDUuODQgMTA1Ljg0IDEwNS44NCAwIDAgMCAtMTA1Ljg0IC0xMDUuODR6bTAgMzIuNzZjNS4xNiAwLjExNyA5LjU1IDEuODc1IDEzLjE4IDUuMjczIDMuMzQgMy41NzUgNS4wNyA3Ljk0IDUuMTkgMTMuMDk2LTAuMTIgNS4xNTYtMS44NSA5LjQwNC01LjE5IDEyLjc0NC0zLjYzIDMuNzUtOC4wMiA1LjYyNS0xMy4xOCA1LjYyNXMtOS40LTEuODc1LTEyLjc0LTUuNjI1Yy0zLjc1LTMuMzQtNS42My03LjU4OC01LjYzLTEyLjc0NHMxLjg4LTkuNTIxIDUuNjMtMTMuMDk2YzMuMzQtMy4zOTggNy41OC01LjE1NiAxMi43NC01LjI3M3ptLTE2LjM1IDUzLjc5MmgzMi43OXY5Mi4zN2gtMzIuNzl2LTkyLjM3eiIgZmlsbC1ydWxlPSJldmVub2RkIiBmaWxsPSIjNzJhN2NmIi8+Cjwvc3ZnPgo=');
             background-size: 16px 16px;     background-position: left center;   background-repeat: no-repeat;   min-height: 16px;   display: inline-block;  padding-left: 16px; cursor: help;   margin-left: 4px;}
 
-		header .version	{font-size: 12px; color: #999; margin-left: 10px;}
+		header .version	{font-size: 12px; color: var(--w--gray6); margin-left: 10px; vertical-align: super; }
+		header h2 { margin: 4px 0;  transition: font-size .1s; }
+		header h2 svg {vertical-align: bottom;  transition: width .1s, height .1s; }
+		header h4 { margin: 4px 0;  transition: font-size .1s; }
+		.sticky	{ position: fixed; top: 0; z-index: 1;  background-color: var(--w--bg);  /*border: 1px solid blue;*/}
+		.sticky.sticked	{  /*background: lightgray;*/ }
+			.sticked h2 { float: left; font-size: 1.2em; }
+			.sticked h4 { /*margin: 4px 0;*/ font-size: 1em; }
+			.sticked svg { width: 24px; height: 24px; }
+			.sticked .config-sys { float: left;  padding-left: 50px; }
+			.sticked pre { margin: 4px 0; }
+
         @media screen and (min-width: 900px) {
             .actions    {position: relative;}
             .action-sub-options {min-width: calc((50% / 3) * 2);     top: 0;     left: 390px;    margin: 0 0 20px;  position: absolute;}
         }
 	</style>
     <script>
-		// allow uncheck of radio buttons using ctrl
-        document.addEventListener('click', function(e){
-            if (e.ctrlKey === true &&
-                e.target.tagName === 'INPUT' &&
-                e.target.type === "radio" &&
-                e.target.checked === true) {
-                e.target.checked = false;
-            }
-        });
-        // make input box enabled/disabled depending on checkbox checked
-        document.addEventListener('DOMContentLoaded', function(e) {
-            toggleInput('omitTablesIncludeInQuery', 'omitTables');
-            toggleInput('ignoreSelectionAndPackAll', 'filenameSelectionInclude');
-            toggleInput('ignoreSelectionAndPackAll', 'filenameSelectionExclude');
-        });
+	let Dump = {
 
-        // select text inside a node
-        function selectText(containerId) {
-            var range;
-            if (document.selection) {
-                range = document.body.createTextRange();
-                range.moveToElementText(document.getElementById(containerId));
-                range.select();
-            } else if (window.getSelection()) {
-                range = document.createRange();
-                range.selectNode(document.getElementById(containerId));
-                window.getSelection().removeAllRanges();
-                window.getSelection().addRange(range);
-            }
-        }
-        function toggleInput(triggerId, inputId, reverse)   {
-            var trigger = document.getElementById(triggerId);
-            var input = document.getElementById(inputId);
-            if (reverse ? !trigger.checked : trigger.checked)
-                input.disabled = false;
-            else
-                input.disabled = true;
-        }
-        function selectDomainsPredefinedSet(targetElementId, sourceElementId, setElementsCount) {
-            document.getElementById(targetElementId).innerHTML = document.getElementById(sourceElementId).innerHTML;
-            document.getElementById(targetElementId).rows = setElementsCount;
-        }
+		selectText: (containerId) => {
+			let range;
+			if (document.selection) {
+				range = document.body.createTextRange();
+				range.moveToElementText(document.getElementById(containerId));
+				range.select();
+			} else if (window.getSelection()) {
+				range = document.createRange();
+				range.selectNode(document.getElementById(containerId));
+				window.getSelection().removeAllRanges();
+				window.getSelection().addRange(range);
+			}
+		},
+
+		selectDomainsPredefinedSet: (targetElementId, sourceElementId, setElementsCount) => {
+			document.getElementById(targetElementId).innerHTML = document.getElementById(sourceElementId).innerHTML;
+			document.getElementById(targetElementId).rows = setElementsCount;
+		},
+
+		toggleInput: (triggerId, inputId, reverse) => {
+			let trigger = document.getElementById(triggerId);
+			let input = document.getElementById(inputId);
+			input.disabled = !(reverse ? !trigger.checked : trigger.checked);
+		},
+
+
+		init: () => {
+			let stickyHeadPart = document.getElementById('head_part');
+            let stickAfter = 1;
+            let paddingAdd = 10;
+            let stickyHeadPartHeight = parseInt(getComputedStyle(stickyHeadPart, null).height.replace('px', ''));
+            document.body.style.paddingTop = stickyHeadPartHeight + paddingAdd + 'px';
+
+
+            window.addEventListener('scroll', e => {
+                let scrollPos = window.scrollY;
+                //let bodyTopPadding = 
+
+                if (scrollPos > stickAfter)	{
+						stickyHeadPart.classList.add('sticked');
+                        // body.style.paddingTop = bodyTopPadding + 'px';
+				}
+                else	{
+						stickyHeadPart.classList.remove('sticked');
+                        // body.style.paddingTop = '0';
+				}
+			});
+
+
+			// allow unchecking radio buttons using ctrl key
+			document.addEventListener('click', e => {
+				if (e.ctrlKey === true &&
+					e.target.tagName === 'INPUT' &&
+					e.target.type === 'radio' &&
+					e.target.checked === true) {
+						e.target.checked = false;
+				}
+			});
+
+
+			// make input box enabled/disabled depending on checkbox checked
+			document.addEventListener('DOMContentLoaded', e => {
+				Dump.toggleInput('omitTablesIncludeInQuery', 'omitTables');
+				Dump.toggleInput('ignoreSelectionAndPackAll', 'filenameSelectionInclude');
+				Dump.toggleInput('ignoreSelectionAndPackAll', 'filenameSelectionExclude');
+			});
+		},
+	};
     </script>
 </head>
 <body>
+  	<header class="sticky" id="head_part">
 
-	<header>
-		<h2>WTP '.' TYPO3 Dump tool <span class="version"><?php	print DUMP_VERSION;	?></span> </h2>
-	</header>
+		<h2><svg  width="32"  height="32"   xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+				<path fill="#4a4a4a" d="M0 0h128v128H0z"/>
+				<path fill="#b4b4b4" d="M36.793,49.874c0.393-2.458,0.896-5.125,1.512-8 c0.614-2.875,1.29-5.825,2.027-8.848c0.738-3.023,1.523-6.021,2.36-8.996c0.835-2.974,1.646-5.789,2.433-8.443H34.064
+					c-1.131,2.557-2.372,5.322-3.723,8.295c-1.353,2.975-2.667,5.985-3.945,9.032c-1.279,3.049-2.483,6.022-3.613,8.922 c-1.131,2.901-2.041,5.58-2.728,8.037H36.793z"/>
+				<path fill="#b4b4b4" d="M54.748,105.986c0.516,1.131,1.228,2.127,2.138,2.986 c0.909,0.861,1.965,1.537,3.171,2.028c1.204,0.491,2.494,0.737,3.871,0.737c1.425,0,2.74-0.247,3.945-0.737
+					c1.204-0.491,2.249-1.167,3.133-2.028c0.885-0.859,1.585-1.855,2.102-2.986c0.517-1.13,0.774-2.334,0.774-3.613 c0-1.327-0.258-2.544-0.774-3.65c-0.516-1.106-1.216-2.076-2.102-2.913c-0.885-0.835-1.93-1.486-3.133-1.954
+					c-1.205-0.466-2.52-0.701-3.945-0.701c-1.377,0-2.667,0.234-3.871,0.701c-1.206,0.468-2.262,1.119-3.171,1.954 c-0.91,0.836-1.622,1.807-2.138,2.913s-0.774,2.323-0.774,3.65C53.973,103.652,54.231,104.856,54.748,105.986z"/>
+				<path fill="#b4b4b4" d="M90.841,15.734c-0.344,2.458-0.811,5.125-1.401,8 c-0.59,2.875-1.229,5.825-1.917,8.848c-0.689,3.023-1.438,6.022-2.249,8.996c-0.811,2.975-1.659,5.788-2.544,8.443h10.839
+					c1.18-2.556,2.457-5.309,3.834-8.258c1.375-2.95,2.716-5.936,4.019-8.959c1.302-3.023,2.519-5.997,3.65-8.922 c1.13-2.924,2.04-5.641,2.729-8.148H90.841z"/>
+			'.' </svg>
+			DUMP tool <span class="version"><?php	print DUMP_VERSION;	?></span>
+		</h2>
 
 
-    <div class="config">
-		<pre>PATH_site = <span id="pre_path_site" onclick="selectText('pre_path_site');"><?php  print PATH_site;  ?></span></pre>
-		<pre>PATH_dump = <span id="pre_path_dump" onclick="selectText('pre_path_dump');"><?php  print PATH_dump;  ?></span></pre>
+		<div class="config-sys">
+			<pre>PATH_site = <span id="pre_path_site" onclick="Dump.selectText('pre_path_site');"><?php  print PATH_site;  ?></span></pre>
+			<pre>PATH_dump = <span id="pre_path_dump" onclick="Dump.selectText('pre_path_dump');"><?php  print PATH_dump;  ?></span></pre>
+		</div>
 
+
+		<div class="clear  config-context">
+			<?php  print $Dump->sysContextInfo;	 ?>
+		</div>
+  	</header>
+
+	<div class="config-env">
 		<?php  print $Dump->configInfoHeader;	 ?>
-    </div>
-
+	</div>
 
     <div class="results">
         <?php  print $Dump->displayGeneratedCommands();  ?>
@@ -1565,7 +1752,7 @@ echo exec('/usr/bin/docker -v');*/
                                             'content' => function() use ($Dump) {
                                                 $code = "<div class='form-row form-row-checkbox'><label>
                                                             <input type='checkbox' name='omitTablesIncludeInQuery' id='omitTablesIncludeInQuery' 
-                                                            	onclick='toggleInput(\"omitTablesIncludeInQuery\", \"omitTables\");'"
+                                                            	onclick='Dump.toggleInput(\"omitTablesIncludeInQuery\", \"omitTables\");'"
 																. ($_POST['omitTablesIncludeInQuery'] ? " checked" : '') . ">
                                                             Omit these tables (export only structure):</label>
                                                         </div>
@@ -1593,7 +1780,7 @@ echo exec('/usr/bin/docker -v');*/
                                                             <select name='filenameSelectionInclude[]' id='filenameSelectionInclude' size='10' multiple>";
 
                                                                 foreach ($Dump->getFilesAndDirectories('', ['DUMP']) as $dir)  {
-                                                                    $included = is_array($_POST['filenameSelectionInclude']) ? $_POST['filenameSelectionInclude'] : $Dump->options['defaultIncludeFilesystem'];
+                                                                    $included = is_array($_POST['filenameSelectionInclude']) ? $_POST['filenameSelectionInclude'] : $Dump->option('defaultIncludeFilesystem');
                                                                     $selected = in_array($dir, $included) ? ' selected' : '';
                                                                     $code .= "<option{$selected}>".$dir.'</option>';
                                                                 }
@@ -1604,11 +1791,11 @@ echo exec('/usr/bin/docker -v');*/
                                                             <label>EXCLUDE:</label>
                                                             <select name='filenameSelectionExclude[]' id='filenameSelectionExclude' size='10' multiple>";
 
-                                                                $listSubdirsOf = $Dump->options['defaultExcludeFilesystem_listItemsFromDirs'];
+                                                                $listSubdirsOf = $Dump->option('defaultExcludeFilesystem_listItemsFromDirs');
                                                                 foreach ($listSubdirsOf as $dir)
                                                                     foreach ($Dump->getFilesAndDirectories($dir) as $subdir) {
                                                                         $subdirPath = $dir . '/' . $subdir;
-                                                                        $excluded = is_array($_POST['filenameSelectionExclude']) ? $_POST['filenameSelectionExclude'] : $Dump->options['defaultExcludeFilesystem'];
+                                                                        $excluded = is_array($_POST['filenameSelectionExclude']) ? $_POST['filenameSelectionExclude'] : $Dump->option('defaultExcludeFilesystem');
                                                                         $selected = in_array($subdirPath, $excluded) ? ' selected' : '';
                                                                         $code .= "<option{$selected}>" . $subdirPath . '</option>';
                                                                     }
@@ -1619,7 +1806,7 @@ echo exec('/usr/bin/docker -v');*/
                                                     </div>
                                                     <div class='form-row form-row-checkbox'>
                                                         <label><input type='checkbox' id='ignoreSelectionAndPackAll' name='ignoreSelectionAndPackAll'
-                                                        	onclick='toggleInput(\"ignoreSelectionAndPackAll\", \"filenameSelectionInclude\", true); toggleInput(\"ignoreSelectionAndPackAll\", \"filenameSelectionExclude\", true);'"
+                                                        	onclick='Dump.toggleInput(\"ignoreSelectionAndPackAll\", \"filenameSelectionInclude\", true); Dump.toggleInput(\"ignoreSelectionAndPackAll\", \"filenameSelectionExclude\", true);'"
 															. ($_POST['ignoreSelectionAndPackAll'] ? " checked" : '').">
                                                         	Ignore selection and pack all</label>
                                                     </div>
@@ -1694,18 +1881,18 @@ echo exec('/usr/bin/docker -v');*/
                                             //'valid' => !$Dump->checkFieldError('domainsFrom'),
                                             'class' => 'selector-domains',
                                             'content' => function() use ($Dump) {
-                                                $domainsFrom = (is_array($_POST['domainsFrom']) && count($_POST['domainsFrom']))  ?  $_POST['domainsFrom']  :  trim($Dump->options['updateDomains_defaultDomainSet'][ $Dump->options['updateDomains_defaultDomainSetFrom'] ]);
-                                                $domainsTo = (is_array($_POST['domainsTo']) && count($_POST['domainsTo']))  ?  $_POST['domainsTo']  :  trim($Dump->options['updateDomains_defaultDomainSet'][ $Dump->options['updateDomains_defaultDomainSetTo'] ]);
+                                                $domainsFrom = (is_array($_POST['domainsFrom']) && count($_POST['domainsFrom']))  ?  $_POST['domainsFrom']  :  trim($Dump->option('updateDomains_defaultDomainSet')[ $Dump->option('updateDomains_defaultDomainSetFrom') ]);
+                                                $domainsTo = (is_array($_POST['domainsTo']) && count($_POST['domainsTo']))  ?  $_POST['domainsTo']  :  trim($Dump->option('updateDomains_defaultDomainSet')[ $Dump->option('updateDomains_defaultDomainSetTo') ]);
                                                 $countDomainFrom = count(explode("\n", $domainsFrom))  OR  5;
                                                 $countDomainTo = count(explode("\n", $domainsTo))  OR  5;
 
                                                 $linksSetsFrom = '';
                                                 $linksSetsTo = '';
-                                                foreach (is_array($Dump->options['updateDomains_defaultDomainSet']) ? $Dump->options['updateDomains_defaultDomainSet'] : [] as $domainSetKey => $domainSet)	{
+                                                foreach (is_array($Dump->option('updateDomains_defaultDomainSet')) ? $Dump->option('updateDomains_defaultDomainSet') : [] as $domainSetKey => $domainSet)	{
                                                 	$domainSetId = 'placeholder_domainset_'.$domainSetKey;
                                                 	$domainSetCount = count(explode("\n", trim($domainSet)));
-                                                    $domainSetOnclickFrom = "selectDomainsPredefinedSet('domainsFrom', '{$domainSetId}', {$domainSetCount}); return false;";
-                                                    $domainSetOnclickTo = "selectDomainsPredefinedSet('domainsTo', '{$domainSetId}', {$domainSetCount}); return false;";
+                                                    $domainSetOnclickFrom = "Dump.selectDomainsPredefinedSet('domainsFrom', '{$domainSetId}', {$domainSetCount}); return false;";
+                                                    $domainSetOnclickTo = "Dump.selectDomainsPredefinedSet('domainsTo', '{$domainSetId}', {$domainSetCount}); return false;";
                                                     $linksSetsFrom .= '<span class="link-set"><a href="#" onclick="'.$domainSetOnclickFrom.'">'.$domainSetKey.'</a></span> '
 															. '<div class="hidden" id="'.$domainSetId.'">'.trim($domainSet).'</div>';
                                                     $linksSetsTo .= '<span class="link-set"><a href="#" onclick="'.$domainSetOnclickTo.'">'.$domainSetKey.'</a></span> '
@@ -1735,9 +1922,9 @@ echo exec('/usr/bin/docker -v');*/
                                                         ."</textarea>
                                                     </div>
                                                     <div class='form-row form-row-radio'>
-                                                        <label>{$Dump->formField_radio('domainsUpdate_method', Dump::DATABASE_QUERY_METHOD__MYSQLI, $Dump->options['defaultDatabaseQueryMethod'])}
+                                                        <label>{$Dump->formField_radio('domainsUpdate_method', Dump::DATABASE_QUERY_METHOD__MYSQLI, $Dump->option('defaultDatabaseQueryMethod'))}
 	                                                	Mysqli - php connection</label>
-                                                        <label>{$Dump->formField_radio('domainsUpdate_method', Dump::DATABASE_QUERY_METHOD__CLI, $Dump->options['defaultDatabaseQueryMethod'])}
+                                                        <label>{$Dump->formField_radio('domainsUpdate_method', Dump::DATABASE_QUERY_METHOD__CLI, $Dump->option('defaultDatabaseQueryMethod'))}
 	                                                	CLI - command line bin execute</label>
                                                     </div>";
                                                 return $code;
@@ -1765,7 +1952,7 @@ echo exec('/usr/bin/docker -v');*/
                                                     
                                                     <div class='form-row'>
                                                         <label>Source domain to fetch from:</label>
-                                                        <input name='fetchFilesDomainFrom' id='fetchFilesDomainFrom' value='{$Dump->options['fetchFiles_defaultSourceDomain']}' type='text'>
+                                                        <input name='fetchFilesDomainFrom' id='fetchFilesDomainFrom' value='{$Dump->option('fetchFiles_defaultSourceDomain')}' type='text'>
                                                     </div>
                                                     <div{$Dump->checkFieldError_printClass('fetchFilesUrls', 'form-row')}>
                                                         <label>URLs:</label>
@@ -1797,9 +1984,9 @@ echo exec('/usr/bin/docker -v');*/
                                                         <textarea name='databaseQuery' cols='64' rows='16'>" . htmlspecialchars($_POST['databaseQuery']) . "</textarea>
                                                     </div>
                                                     <div{$Dump->checkFieldError_printClass('databaseQuery_method', 'form-row form-row-radio')}>
-                                                        <label>". $Dump->formField_radio('databaseQuery_method', Dump::DATABASE_QUERY_METHOD__MYSQLI, $Dump->options['defaultDatabaseQueryMethod'])
+                                                        <label>". $Dump->formField_radio('databaseQuery_method', Dump::DATABASE_QUERY_METHOD__MYSQLI, $Dump->option('defaultDatabaseQueryMethod'))
                                                             . "Mysqli - php connection</label>
-                                                        <label>". $Dump->formField_radio('databaseQuery_method', Dump::DATABASE_QUERY_METHOD__CLI, $Dump->options['defaultDatabaseQueryMethod'])
+                                                        <label>". $Dump->formField_radio('databaseQuery_method', Dump::DATABASE_QUERY_METHOD__CLI, $Dump->option('defaultDatabaseQueryMethod'))
                                                             . "CLI - command line bin execute</label>
                                                     </div>";
                                             }
@@ -1957,12 +2144,18 @@ echo exec('/usr/bin/docker -v');*/
 
 
 	<footer>
-		<i>DUMP (Damn Usable Management Program)<br>
-            Database and filesystem migration tool for TYPO3<br>
-            WTP - wolo.pl '.' studio 2013-2021<br>
-            v<?php print DUMP_VERSION; ?>
+		<i>
+			<a href="https://github.com/w010/DUMP">DUMP</a> (Damn Useful <abbr title="[Management|Migration|Maintenance]">Magic</abbr> Program)<br>
+			Db and filesystem migration tool + some low-level utilities <abbr title="but can be a good helper for other webapps as well">for TYPO3</abbr> devs/maintainers<br>
+            v<?php print DUMP_VERSION; ?> | <a href="://wolo.pl/">wolo.pl '.' studio</a> |  2013-2022
         </i>
 	</footer>
 
+
+    <script>
+
+		Dump.init();
+
+    </script>
 </body>
 </html>

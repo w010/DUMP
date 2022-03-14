@@ -1,28 +1,33 @@
-TODO
-to probowac na problem z komunikatem o hasle!
-
-tail -n +2 build-stage-v01.sql >  build-stage-v01fixed.sql
-strip first error line in dump
-
-
-
-TODO:
-- add option to fetch & run Adminer
-- add option to autodestroy - delete dump dir contents (if no sql/zip/etc found there?) or only force on htaccess. better the option to delete completely)
-
-
+```
+    TODO:
+    - add option to fetch & run Adminer
+    - add option to display link to adminer-auto-auth, or direct link to the lib, omitting all the plugins, dump conf layer, redirect etc... it can cause errors sometimes, not always needed
+    -- (moze na dblclick to zrobic? pobierac z attr data linka?)
+    - add option to autodestroy - delete dump dir contents (if no sql/zip/etc found there?) or only force on htaccess. better the option to delete completely)
+    - display message when dump is not secured (try to omit if it detects the word "dev|stage" in instance constants)
+    - add option to generate htauth+user
+    - links to be / fe somewhere
+    - automatic deploy of dump in a subdir - clone git, (set some settings?), lock with auth
+    - to probowac na problem z komunikatem o hasle:
+    tail -n +2 build-stage-v01.sql >  build-stage-v01fixed.sql
+    strip first error line in dump
+    // to sie pojawia w polowie pliku, jesli uzywamy ominiecia danych z niektorych tabel - bo to sa 2 dumpy sklejone w 1 plik
+    // trzeba wiec najpierw obsluzyc sytuacje i uciac tym tailem, dopiero wtedy skleic oba dumpy w jeden
+    // todo: find out how to checkout only specific subdir
+    git clone git://github.com/w010/DUMP.git
+```
 
 
 
 # DUMP
-## Damn Usable Management Program for TYPO3
+## Damn Useful Magic Program for TYPO3
 
 https://www.youtube.com/watch?v=14-fEwga82E
 
 
-WTP DUMP/BACKUP TOOL FOR TYPO3 - wolo.pl '.' studio  
-2013-2020
-Supported TYPO3 versions: 4, 6, 7, 8, 9, 10
+DUMP/BACKUP/MIGRATION TOOL FOR TYPO3
+wolo.pl '.' studio 2013-2022
+Supported TYPO3 versions: 4, 6, 7, 8, 9, 10, 11
 (Note, that recently I don't test it in older TYPO3, so if it doesn't work try older DUMP version)
 
 ! you should change default password !
